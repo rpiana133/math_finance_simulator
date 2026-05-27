@@ -23,7 +23,7 @@ SCOPES = [
 ]
 
 # Determine redirect URI (local dev vs deployed)
-REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501/")
+REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://mathfinancesimulator.streamlit.app/")
 
 if 'credentials' not in st.session_state:
     st.session_state.credentials = None
