@@ -3,9 +3,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import json
-import os
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from google.cloud import storage
 
@@ -15,7 +15,6 @@ st.set_page_config(page_title="Classroom Stock Ledger & Volatility Lab", page_ic
 # ==========================================
 # 1. GOOGLE OAUTH2 AUTHENTICATION GATING
 # ==========================================
-CLIENT_SECRETS_FILE = "client_secret.json"
 SCOPES = [
     'https://www.googleapis.com/auth/classroom.coursework.students',
     'https://www.googleapis.com/auth/userinfo.email',
@@ -23,15 +22,22 @@ SCOPES = [
     'openid'
 ]
 
+# Determine redirect URI (local dev vs deployed)
+REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501/")
+
 if 'credentials' not in st.session_state:
     st.session_state.credentials = None
 if 'user_info' not in st.session_state:
     st.session_state.user_info = None
 
+def get_client_config():
+    return json.loads(st.secrets["GOOGLE_CLIENT_SECRET"])
+
 def do_login():
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES,
-        redirect_uri='http://localhost:8501/'
+    client_config = get_client_config()
+    flow = Flow.from_client_config(
+        client_config, scopes=SCOPES,
+        redirect_uri=REDIRECT_URI
     )
     flow.autogenerate_code_verifier = False
     flow.code_verifier = None
@@ -41,9 +47,10 @@ def do_login():
 def handle_redirect():
     query_params = st.query_params
     if 'code' in query_params:
-        flow = Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE, scopes=SCOPES,
-            redirect_uri='http://localhost:8501/'
+        client_config = get_client_config()
+        flow = Flow.from_client_config(
+            client_config, scopes=SCOPES,
+            redirect_uri=REDIRECT_URI
         )
         flow.autogenerate_code_verifier = False
         flow.code_verifier = None
@@ -59,8 +66,10 @@ def handle_redirect():
 # Execute Login Wall
 if st.session_state.credentials is None:
     st.title("🧮 Math Simulator Login")
-    if not os.path.exists(CLIENT_SECRETS_FILE):
-        st.warning("⚠️ **System Setup Required:** Please drop your downloaded `client_secret.json` file into this directory and refresh.")
+    try:
+        _ = get_client_config()
+    except (KeyError, json.JSONDecodeError):
+        st.warning("⚠️ **Setup Required:** Set `GOOGLE_CLIENT_SECRET` in Streamlit Cloud secrets.")
         st.stop()
     handle_redirect()
     if st.session_state.credentials is None:
@@ -75,10 +84,15 @@ GCS_BUCKET_NAME = "math_finance_simulator"
 BLOB_NAME = "classroom_portfolios.json"
 student_email = st.session_state.user_info['email']
 
+def get_gcs_client():
+    key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
+    creds = service_account.Credentials.from_service_account_info(key_info)
+    return storage.Client(credentials=creds, project=key_info.get("project_id"))
+
 def get_gcs_database():
     """Fetches the global student portfolio database ledger from Google Cloud Storage."""
     try:
-        storage_client = storage.Client()
+        storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(BLOB_NAME)
         
@@ -96,7 +110,7 @@ def get_gcs_database():
 def save_gcs_database(db_data):
     """Saves the updated database ledger back up to Google Cloud Storage."""
     try:
-        storage_client = storage.Client()
+        storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(BLOB_NAME)
         blob.upload_from_string(json.dumps(db_data, indent=4), content_type='application/json')
