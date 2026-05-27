@@ -230,54 +230,6 @@ def plot_candlestick(ticker, hist):
     fig.update_xaxes(rangeslider_visible=False)
     return fig
 
-def run_ai_analysis(ticker):
-    api_key = st.secrets.get("OPENAI_API_KEY")
-    if api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key)
-            hist = fetch_full_history(ticker, "6mo")
-            if hist is None or len(hist) < 20:
-                return "Not enough data for analysis."
-            recent = hist.tail(20)
-            current_price = recent['Close'].iloc[-1]
-            ma20 = recent['Close'].mean()
-            ma50 = hist['Close'].tail(50).mean() if len(hist) >= 50 else None
-            price_change = ((recent['Close'].iloc[-1] - recent['Close'].iloc[0]) / recent['Close'].iloc[0]) * 100
-            prompt = f"""Stock: {ticker}
-Current Price: ${current_price:.2f}
-20-day avg: ${ma20:.2f}
-50-day avg: ${ma50:.2f if ma50 else 'N/A'}
-Recent 20-day change: {price_change:+.2f}%
-High (20d): ${recent['High'].max():.2f}
-Low (20d): ${recent['Low'].min():.2f}
-Volume avg (20d): {recent['Volume'].mean():.0f}
-
-Give a concise buy/hold/sell analysis (1-2 sentences)."""
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=150
-            )
-            return resp.choices[0].message.content
-        except Exception as e:
-            return f"AI unavailable ({e})"
-    # Fallback: heuristic analysis
-    hist = fetch_full_history(ticker, "3mo")
-    if hist is None or len(hist) < 10:
-        return "Not enough data for analysis."
-    recent = hist.tail(10)
-    sma5 = recent['Close'].mean()
-    current = recent['Close'].iloc[-1]
-    change = ((current - recent['Close'].iloc[0]) / recent['Close'].iloc[0]) * 100
-    if change > 5:
-        verdict = "📈 Bullish momentum"
-    elif change < -5:
-        verdict = "📉 Bearish momentum"
-    else:
-        verdict = "➡️ Sideways / neutral"
-    return f"{verdict} — {change:+.1f}% over 10 days. SMA(5): ${sma5:.2f}. Current: ${current:.2f}."
-
 # ==========================================
 # 4. USER INTERFACE (DASHBOARD & LAB MODULES)
 # ==========================================
@@ -350,7 +302,7 @@ with col_left:
                         st.rerun()
 
 with col_right:
-    tab1, tab2, tab3 = st.tabs(["🔬 Volatility", "📈 Chart", "🤖 AI Analysis"])
+    tab1, tab2 = st.tabs(["🔬 Volatility", "📈 Chart"])
     
     with tab1:
         st.header("Volatility Calculator")
@@ -387,17 +339,6 @@ with col_right:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Not enough historical data.")
-    
-    with tab3:
-        ai_ticker = st.selectbox(
-            "Select Asset",
-            options=list(student_holdings.keys()) if student_holdings else ["AAPL", "MSFT", "GOOGL"],
-            key="ai_ticker"
-        )
-        if st.button("Run AI Analysis", key="ai_btn"):
-            with st.spinner("Analyzing..."):
-                result = run_ai_analysis(ai_ticker)
-            st.info(result)
 
 st.divider()
 st.header("📊 Student Live Portfolio Ledger Grid")
