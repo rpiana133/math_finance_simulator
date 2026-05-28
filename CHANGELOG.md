@@ -5,6 +5,7 @@
 ### Added
 - Portfolio allocation donut chart (cash vs holdings) at top of Portfolio tab
 - Full S&P 500 stock list (503 stocks) plus ETFs replacing curated 50-stock picker
+- 50-day SMA overlay on candlestick charts; volume bars colored green/red by daily direction
 - 15% profit tax on stock sales (deducted from gains only)
 - Weekly $100 deposit for students (accumulates for missed weeks)
 - GCS bucket object versioning enabled to preserve student portfolio data through bug fixes
