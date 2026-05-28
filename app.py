@@ -3,9 +3,12 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import json
+import urllib.parse
+import requests
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
+from google.auth.transport.requests import Request as AuthReq
 from googleapiclient.discovery import build
 from google.cloud import storage
 import plotly.graph_objects as go
@@ -256,6 +259,39 @@ GCS_BUCKET_NAME = "math_finance_simulator"
 BLOB_PREFIX = "portfolios/"
 student_email = st.session_state.user_info['email']
 
+@st.cache_resource(ttl=1800)
+def _gcs_token():
+    key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
+    creds = service_account.Credentials.from_service_account_info(
+        key_info, scopes=["https://www.googleapis.com/auth/devstorage.read_write"]
+    )
+    creds.refresh(AuthReq())
+    return creds.token
+
+def _gcs_read(path):
+    token = _gcs_token()
+    url = f"https://storage.googleapis.com/storage/v1/b/{GCS_BUCKET_NAME}/o/{urllib.parse.quote(path)}?alt=media"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.text
+
+def _gcs_write(path, data):
+    token = _gcs_token()
+    url = f"https://storage.googleapis.com/upload/storage/v1/b/{GCS_BUCKET_NAME}/o?uploadType=media&name={urllib.parse.quote(path)}"
+    resp = requests.put(url, data=data.encode('utf-8'), headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    })
+    resp.raise_for_status()
+
+def _gcs_exists(path):
+    token = _gcs_token()
+    url = f"https://storage.googleapis.com/storage/v1/b/{GCS_BUCKET_NAME}/o/{urllib.parse.quote(path)}"
+    resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+    return resp.status_code == 200
+
 def get_gcs_client():
     key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
     creds = service_account.Credentials.from_service_account_info(key_info)
@@ -264,20 +300,15 @@ def get_gcs_client():
 
 def load_student_profile(email):
     try:
-        storage_client = get_gcs_client()
-        bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
-        exists = blob.exists()
-        if not exists:
-            # Also check without prefix (older format)
-            fallback = bucket.blob(f"{email}.json")
-            if fallback.exists():
-                data = fallback.download_as_text()
+        data = _gcs_read(f"{BLOB_PREFIX}{email}.json")
+        if data is None:
+            # Fallback: check without prefix
+            data = _gcs_read(f"{email}.json")
+            if data is not None:
                 profile = json.loads(data)
                 save_student_profile(email, profile)
                 return profile
             return None
-        data = blob.download_as_text()
         return json.loads(data)
     except Exception as e:
         st.error(f"GCS load error: {e}")
@@ -292,10 +323,7 @@ def save_student_profile(email, profile):
         st.error(f"JSON serialization error: {e}")
         return
     try:
-        storage_client = get_gcs_client()
-        bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
-        blob.upload_from_string(payload)
+        _gcs_write(f"{BLOB_PREFIX}{email}.json", payload)
     except Exception as e:
         st.error(f"GCS save error: {e}")
         if 'profiles_cache' not in st.session_state:
@@ -307,11 +335,9 @@ student_profile = load_student_profile(student_email)
 if student_profile is None:
     # Migration: try reading from the old monolithic file
     try:
-        storage_client = get_gcs_client()
-        bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        old_blob = bucket.blob("classroom_portfolios.json")
-        if old_blob.exists():
-            old_data = json.loads(old_blob.download_as_text())
+        old_json = _gcs_read("classroom_portfolios.json")
+        if old_json:
+            old_data = json.loads(old_json)
             if student_email in old_data:
                 student_profile = old_data[student_email]
                 student_profile.setdefault("unsettled_cash", 0.0)
