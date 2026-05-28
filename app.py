@@ -265,7 +265,11 @@ def _gcs_creds():
     raw = st.secrets["GCS_SERVICE_ACCOUNT"]
     if isinstance(raw, dict):
         return raw
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except Exception as e:
+        st.error(f"GCS_SERVICE_ACCOUNT parse error: {e}")
+        raise
 
 @st.cache_resource(ttl=1500)
 def _gcs_token():
