@@ -870,7 +870,28 @@ POPULAR_STOCKS = {
     "SMH": "VanEck Semiconductor ETF",
     "SOXX": "iShares Semiconductor ETF",
     "SOXQ": "Invesco Semiconductor ETF",
-    "PSI": "Invesco Dynamic Semiconductors ETF"
+    "PSI": "Invesco Dynamic Semiconductors ETF",
+    # International / Country ETFs
+    "FLTW": "Franklin FTSE Taiwan ETF",
+    "VWO": "Vanguard FTSE Emerging Markets ETF",
+    "VEA": "Vanguard FTSE Developed Markets ETF",
+    "EFA": "iShares MSCI EAFE ETF",
+    "IEMG": "iShares Core MSCI Emerging Markets ETF",
+    "FXI": "iShares China Large-Cap ETF",
+    "EWJ": "iShares MSCI Japan ETF",
+    "EWG": "iShares MSCI Germany ETF",
+    "EWZ": "iShares MSCI Brazil ETF",
+    "INDA": "iShares MSCI India ETF",
+    "KWEB": "KraneShares CSI China Internet ETF",
+    "ARKK": "ARK Innovation ETF",
+    "TAN": "Invesco Solar ETF",
+    "ICLN": "iShares Global Clean Energy ETF",
+    "XLI": "Industrial Sector ETF",
+    "XLY": "Consumer Discretionary ETF",
+    "XLP": "Consumer Staples ETF",
+    "XLU": "Utilities Sector ETF",
+    "XLB": "Materials Sector ETF",
+    "XLRE": "Real Estate Sector ETF"
 }
 
 ALL_TICKERS = sorted(POPULAR_STOCKS.keys())
