@@ -307,6 +307,25 @@ student_holdings = student_profile["holdings"]
 student_alerts = student_profile.get("alerts", [])
 student_history = student_profile.get("history", [])
 
+# Weekly $100 deposit
+now = datetime.now()
+last_deposit_str = student_profile.get("last_weekly_deposit")
+if last_deposit_str:
+    last_deposit = datetime.fromisoformat(last_deposit_str)
+    weeks_passed = int((now - last_deposit).days / 7)
+    if weeks_passed >= 1:
+        deposit_amount = weeks_passed * 100
+        student_profile["cash"] = round(student_cash + deposit_amount, 2)
+        student_profile["last_weekly_deposit"] = now.isoformat()
+        save_gcs_database(global_database)
+        st.success(f"💰 Weekly deposit: +${deposit_amount:.2f} ({weeks_passed} week{'s' if weeks_passed > 1 else ''})")
+else:
+    student_profile["last_weekly_deposit"] = now.isoformat()
+    save_gcs_database(global_database)
+
+# Refresh local variables after potential deposit
+student_cash = student_profile["cash"]
+
 # ==========================================
 # 3. STOCK DATA & REAL-TIME MATHEMATICS ENGINE
 # ==========================================
