@@ -102,27 +102,26 @@ CUSTOM_CSS = """
     .stSelectbox label, .stNumberInput label, .stRadio label {
         color: #2d3748 !important; font-weight:600 !important; font-size:0.85rem !important;
     }
-    .stSelectbox div[data-baseweb="select"] span { color:#1a202c !important; }
+    .stSelectbox div[data-baseweb="select"] span { color:#000000 !important; }
     .stSelectbox div[data-baseweb="select"] {
         background: #ffffff !important; border: 1px solid #cbd5e0 !important; border-radius: 6px !important;
     }
     .stSelectbox div[data-baseweb="select"]:hover { border-color: #9ca3af !important; }
     /* Select dropdown */
-    div[data-baseweb="popover"], div[data-baseweb="popover"] *,
-    div[data-baseweb="menu"], div[data-baseweb="menu"] *,
-    div[role="listbox"], div[role="listbox"] *,
-    ul[role="listbox"], ul[role="listbox"] * {
-        background-color: #ffffff !important;
-        color: #1a202c !important;
-        border-color: #e2e8f0 !important;
-    }
-    div[data-baseweb="popover"], div[data-baseweb="menu"],
+    div[data-baseweb="popover"],
+    div[data-baseweb="menu"],
     div[role="listbox"], ul[role="listbox"],
     .stSelectbox div[role="listbox"] {
-        border: 1px solid #e2e8f0 !important;
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
         border-radius: 6px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
         padding: 4px 0 !important;
+    }
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] li,
+    li[role="option"], div[role="option"] {
+        color: #000000 !important; font-size: 0.9rem !important; padding: 8px 12px !important;
+        background: #ffffff !important;
     }
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover,
     li[role="option"]:hover, div[role="option"]:hover,
@@ -139,14 +138,14 @@ CUSTOM_CSS = """
     .stSelectbox [class*="dropdown"],
     .stSelectbox [class*="option"],
     .stSelectbox [class*="select"] > [class*="container"] {
-        background-color: #ffffff !important;
-        color: #1a202c !important;
+        background: #ffffff !important;
+        color: #000000 !important;
     }
 
     /* Native select fallback */
     .stSelectbox select, .stSelectbox select option {
-        background-color: #ffffff !important;
-        color: #1a202c !important;
+        background: #ffffff !important;
+        color: #000000 !important;
     }
     .stSelectbox select {
         border: 1px solid #cbd5e0 !important;
@@ -154,21 +153,16 @@ CUSTOM_CSS = """
         padding: 4px 8px !important;
     }
 
-    /* Streamlit dark mode override */
+    /* Dark mode override */
     [data-theme="dark"] .stSelectbox * {
-        background-color: #ffffff !important;
-        color: #1a202c !important;
-    }
-
-    /* Catch absolutely any child of stSelectbox */
-    .stSelectbox * {
-        -webkit-text-fill-color: initial !important;
+        background: #ffffff !important;
+        color: #000000 !important;
     }
     
     /* Number input */
     .stNumberInput input {
         background: #ffffff !important; border: 1px solid #cbd5e0 !important;
-        border-radius: 6px !important; color: #1a202c !important;
+        border-radius: 6px !important; color: #000000 !important;
     }
     .stNumberInput input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 2px rgba(37,99,235,0.15) !important; }
     
@@ -189,7 +183,7 @@ CUSTOM_CSS = """
 </style>
 <script>
 const o=new MutationObserver(m=>{m.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===1){n.querySelectorAll('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]').forEach(f);if(n.matches&&n.matches('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]'))f(n)}})})});
-function f(e){e.style.setProperty('background-color','#ffffff','important');e.style.setProperty('color','#1a202c','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#ffffff','important');o.style.setProperty('color','#1a202c','important')})}
+function f(e){e.style.setProperty('background-color','#ffffff','important');e.style.setProperty('color','#000000','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#ffffff','important');o.style.setProperty('color','#000000','important')})}
 o.observe(document.body,{childList:true,subtree:true});
 </script>"""
 
