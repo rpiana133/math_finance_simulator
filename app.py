@@ -1134,7 +1134,7 @@ with main_tab2:
                 
                 if action == "Buy":
                     if actual_cost > student_cash:
-                        st.error("Insufficient cash.")
+                        st.error(f"Insufficient cash. You have ${student_cash:.2f}, need ${actual_cost:.2f}.")
                     else:
                         student_profile["cash"] = round(student_cash - actual_cost, 2)
                         if trade_ticker in student_holdings:
