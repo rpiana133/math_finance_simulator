@@ -259,7 +259,8 @@ student_email = st.session_state.user_info['email']
 def get_gcs_client():
     key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
     creds = service_account.Credentials.from_service_account_info(key_info)
-    return storage.Client(credentials=creds, project=key_info.get("project_id"))
+    client = storage.Client(credentials=creds, project=key_info.get("project_id"))
+    return client
 
 def load_student_profile(email):
     try:
@@ -294,7 +295,7 @@ def save_student_profile(email, profile):
         storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
-        blob.upload_from_string(payload, content_type='application/json')
+        blob.upload_from_string(payload)
     except Exception as e:
         st.error(f"GCS save error: {e}")
         if 'profiles_cache' not in st.session_state:
