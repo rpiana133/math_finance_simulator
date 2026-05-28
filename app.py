@@ -236,7 +236,15 @@ POPULAR_STOCKS = {
     "SCHD": "Dividend Equity ETF", "VIG": "Dividend Appreciation ETF",
     "VYM": "High Dividend Yield ETF", "DGRO": "Dividend Growth ETF",
     "SPYD": "S&P 500 High Dividend ETF", "NOBL": "Dividend Aristocrats ETF",
-    "SDY": "S&P Dividend ETF", "DVY": "Select Dividend ETF"
+    "SDY": "S&P Dividend ETF", "DVY": "Select Dividend ETF",
+    "BOTZ": "Global X Robotics & AI ETF",
+    "AIQ": "Global X AI & Tech ETF",
+    "ROBT": "First Trust Nasdaq AI & Robotics ETF",
+    "ROBO": "Robo Global Robotics & AI ETF",
+    "ARKQ": "ARK Autonomous Tech & Robotics ETF",
+    "ARKW": "ARK Next Gen Internet ETF",
+    "AIEQ": "Amplify AI Powered Equity ETF",
+    "CHAT": "Roundhill Generative AI ETF"
 }
 
 ALL_TICKERS = list(POPULAR_STOCKS.keys())
