@@ -27,3 +27,4 @@
 ### Fixed
 - OAuth `InvalidGrantError` handling
 - `NameError` from helper function being called before definition
+- Price fetching broken on Streamlit Cloud after yfinance 1.4.0 introduced MultiIndex columns. Added `_flatten_cols()` helper to strip the ticker level from MultiIndex so column access like `data['Close']` works again.
