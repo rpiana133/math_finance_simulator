@@ -468,7 +468,7 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # Top nav bar
 st.markdown(f"""
 <div class="topbar">
-    <h1>📈 MathFin Simulator</h1>
+    <h1>📈 Math Finance Simulator</h1>
     <div class="user-badge">
         <span>👤 {student_profile['name']}</span>
         <span style="opacity:0.6">|</span>
