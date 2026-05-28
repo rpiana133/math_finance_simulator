@@ -1029,6 +1029,26 @@ if triggered_alerts:
 main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(["📋 Portfolio", "🪙 Trade", "🔬 Research", "🔔 Alerts"])
 
 with main_tab1:
+    # Build allocation chart data
+    labels = []
+    values = []
+    if student_cash > 0:
+        labels.append("Cash")
+        values.append(student_cash)
+    for ticker, pos in student_holdings.items():
+        price, _, _ = fetch_stock_market_data(ticker)
+        if price is not None:
+            labels.append(ticker)
+            values.append(pos['shares'] * price)
+    if values:
+        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.4,
+                                      marker=dict(line=dict(color='#fff', width=2)),
+                                      textinfo='label+percent', textposition='outside',
+                                      textfont=dict(size=11))])
+        fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
+                          showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True, key="portfolio_pie")
+
     st.markdown('<div class="card"><h3>Positions</h3>', unsafe_allow_html=True)
     if live_portfolio_data:
         df = pd.DataFrame(live_portfolio_data)
