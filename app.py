@@ -260,16 +260,30 @@ GCS_BUCKET_NAME = "math_finance_simulator"
 BLOB_PREFIX = "portfolios/"
 student_email = st.session_state.user_info['email']
 
-@st.cache_resource(ttl=1800)
 def _gcs_creds():
-    raw = st.secrets["GCS_SERVICE_ACCOUNT"]
-    if isinstance(raw, dict):
-        return raw
-    try:
-        return json.loads(raw)
-    except Exception as e:
-        st.error(f"GCS_SERVICE_ACCOUNT parse error: {e}")
-        raise
+    raw = st.secrets.get("GCS_SERVICE_ACCOUNT")
+    if raw:
+        if isinstance(raw, dict):
+            return raw
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    # Build from individual secret fields (user has them as separate TOML keys)
+    fields = {
+        "type": "service_account",
+        "project_id": st.secrets.get("project_id", ""),
+        "private_key_id": st.secrets.get("private_key_id", ""),
+        "private_key": st.secrets.get("private_key", ""),
+        "client_email": st.secrets.get("client_email", ""),
+        "client_id": st.secrets.get("client_id", ""),
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": st.secrets.get("client_x509_cert_url", ""),
+        "universe_domain": "googleapis.com"
+    }
+    return fields
 
 @st.cache_resource(ttl=1500)
 def _gcs_token():
