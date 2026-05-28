@@ -366,41 +366,40 @@ CHART_PERIODS = {
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
 }
 
-@st.cache_data(ttl=600)
 def fetch_stock_market_data(ticker):
     try:
         data = yf.download(ticker, period="1y", progress=False)
         if data.empty:
-            print(f"fetch_stock_market_data: 1y empty for {ticker}, trying 6mo")
+            st.warning(f"1y empty for {ticker}, trying 6mo")
             data = yf.download(ticker, period="6mo", progress=False)
         if data.empty:
-            print(f"fetch_stock_market_data: 6mo empty for {ticker}, trying 1mo")
+            st.warning(f"6mo empty for {ticker}, trying 1mo")
             data = yf.download(ticker, period="1mo", progress=False)
         if data.empty:
-            print(f"fetch_stock_market_data: all periods empty for {ticker}")
+            st.warning(f"All periods empty for {ticker}")
             return None, None, None
         close_price = float(data['Close'].iloc[-1])
         try:
             info = yf.Ticker(ticker).info
             company_name = info.get('shortName') or info.get('longName') or ticker
-        except Exception:
+        except Exception as e:
+            st.warning(f"Ticker info failed for {ticker}: {e}")
             company_name = ticker
         recent = data.tail(10) if len(data) >= 10 else data
         return close_price, recent, company_name
     except Exception as e:
-        print(f"fetch_stock_market_data error for {ticker}: {e}")
+        st.warning(f"fetch_stock_market_data error for {ticker}: {e}")
         return None, None, None
 
-@st.cache_data(ttl=600)
 def fetch_full_history(ticker, period="3mo"):
     try:
         data = yf.download(ticker, period=period, progress=False)
         if data.empty:
-            print(f"fetch_full_history: {period} empty for {ticker}")
+            st.warning(f"fetch_full_history: {period} empty for {ticker}")
             return None
         return data
     except Exception as e:
-        print(f"fetch_full_history error for {ticker}: {e}")
+        st.warning(f"fetch_full_history error for {ticker}: {e}")
         return None
 
 total_holding_value = 0.0
@@ -422,6 +421,8 @@ for ticker, position in list(student_holdings.items()):
             "Total Value": f"${current_val:.2f}",
             "Percentage Return": f"{pct_return:+.2f}%"
         })
+    else:
+        st.warning(f"Price unavailable for {ticker}")
 
 total_portfolio_value = student_cash + total_holding_value
 total_pl_dollars = total_portfolio_value - 1000.00
