@@ -18,72 +18,99 @@ CUSTOM_CSS = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', -apple-system, sans-serif; }
-    .stApp { background: #f0f2f5; }
+    .stApp { background: #e5e7eb; }
     .block-container { padding: 1rem 2rem !important; }
+    
+    /* All text base */
+    p, li, .markdown-text-container, .stMarkdown, .stWrite, div {
+        color: #0a0a0a;
+    }
+    .st-cb, .st-c0, .st-bx, .st-bz { color: #0a0a0a !important; }
     
     /* Top nav bar */
     .topbar {
-        background: linear-gradient(135deg, #1a3a5c 0%, #0d2137 100%);
+        background: #0a1f33;
         padding: 0.75rem 1.5rem;
         border-radius: 8px;
         margin-bottom: 1rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        color: white;
+        color: #ffffff;
     }
-    .topbar h1 { margin:0; font-size:1.3rem; font-weight:600; letter-spacing:-0.3px; }
+    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#ffffff; }
     .topbar .user-badge {
         display:flex; align-items:center; gap:8px;
-        background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px;
-        font-size:0.85rem;
+        background: rgba(255,255,255,0.12); padding: 4px 14px; border-radius: 20px;
+        font-size:0.85rem; color:#e5e7eb;
     }
     
     /* Portfolio summary bar */
     .psummary {
         display: flex; gap: 2rem; margin-bottom: 1.2rem;
-        background: white; padding: 1rem 1.5rem; border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        background: #ffffff; padding: 1rem 1.5rem; border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     }
-    .psummary .item { }
-    .psummary .label { font-size:0.75rem; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
-    .psummary .value { font-size:1.5rem; font-weight:700; color:#111827; }
-    .psummary .value.positive { color:#16a34a; }
+    .psummary .label { font-size:0.75rem; color:#374151; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+    .psummary .value { font-size:1.5rem; font-weight:700; color:#000000; }
+    .psummary .value.positive { color:#059669; }
     .psummary .value.negative { color:#dc2626; }
-    .psummary .sub { font-size:0.85rem; font-weight:500; }
-    .psummary .sub.positive { color:#16a34a; }
+    .psummary .sub { font-size:0.85rem; font-weight:600; }
+    .psummary .sub.positive { color:#059669; }
     .psummary .sub.negative { color:#dc2626; }
     
     /* Cards */
     .card {
-        background: white; border-radius: 8px; padding: 1.25rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem;
+        background: #ffffff; border-radius: 8px; padding: 1.25rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.12); margin-bottom: 1rem;
     }
-    .card h3 { margin:0 0 0.75rem 0; font-size:1rem; font-weight:600; color:#1f2937; }
+    .card h3 { margin:0 0 0.75rem 0; font-size:1rem; font-weight:700; color:#000000; }
     
-    /* Data table styling */
+    /* Data table */
     .dataframe { font-size:0.85rem; }
+    .stAgGrid, [data-testid="stDataFrame"] { color:#000000 !important; font-size:0.9rem !important; }
+    [data-testid="stDataFrame"] td,
+    [data-testid="stDataFrame"] th { color:#000000 !important; }
     
     /* Metric boxes */
     .metric-row { display:flex; gap:1rem; margin-bottom:1rem; }
     .metric-box {
-        background: white; border-radius:8px; padding:0.75rem 1rem; flex:1;
-        box-shadow:0 1px 3px rgba(0,0,0,0.08);
+        background: #ffffff; border-radius:8px; padding:0.75rem 1rem; flex:1;
+        box-shadow:0 1px 4px rgba(0,0,0,0.12);
     }
-    .metric-box .m-label { font-size:0.75rem; color:#6b7280; text-transform:uppercase; font-weight:500; letter-spacing:0.3px; }
-    .metric-box .m-value { font-size:1.1rem; font-weight:700; color:#111827; }
+    .metric-box .m-label { font-size:0.75rem; color:#374151; text-transform:uppercase; font-weight:600; letter-spacing:0.3px; }
+    .metric-box .m-value { font-size:1.1rem; font-weight:700; color:#000000; }
     
     /* Buttons */
     .stButton button {
         font-weight:600; border-radius:6px; font-size:0.85rem;
-        transition: all 0.15s ease;
+        transition: all 0.15s ease; border: 1px solid #d1d5db;
     }
     .stButton button:active { transform:scale(0.97); }
+    .stButton button[kind="primary"] {
+        background: #0a1f33; border: 1px solid #0a1f33; color: #ffffff !important;
+    }
     
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:white; padding:0.25rem; border-radius:8px; }
-    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; }
+    .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e5e7eb; }
+    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#374151 !important; }
+    .stTabs [aria-selected="true"] { background:#0a1f33 !important; color:#ffffff !important; }
     
+    /* Selectbox / Input labels */
+    .stSelectbox label, .stNumberInput label, .stRadio label {
+        color: #0a0a0a !important; font-weight:600 !important; font-size:0.85rem !important;
+    }
+    .stSelectbox div[data-baseweb="select"] span { color:#000000 !important; }
+    
+    /* Info / Warning / Error boxes */
+    .stAlert { border-left: 4px solid; }
+    .stAlert p { color: #0a0a0a !important; }
+
+    /* Caption text */
+    .stCaption, .element-container div.small-font, [data-testid="stCaption"] {
+        color: #374151 !important; font-size:0.8rem !important;
+    }
+
     /* Dividers */
     .stDivider { margin:1rem 0; }
     
