@@ -957,19 +957,26 @@ triggered_alerts = check_and_trigger_alerts()
 
 def plot_candlestick(ticker, hist, period_label="3 Months"):
     period_text = f" ({period_label})" if period_label else ""
+    sma50 = hist['Close'].rolling(50).mean()
+    # Color volume bars by up/down day
+    volume_colors = ['#16a34a' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#dc2626' for i in range(len(hist))]
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         vertical_spacing=0.05,
-        row_heights=[0.7, 0.3]
+        row_heights=[0.8, 0.2]
     )
     fig.add_trace(go.Candlestick(
         x=hist.index, open=hist['Open'], high=hist['High'],
         low=hist['Low'], close=hist['Close'], name=ticker,
         increasing_line_color='#16a34a', decreasing_line_color='#dc2626'
     ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=hist.index, y=sma50, name='SMA 50',
+        line=dict(color='#f59e0b', width=1.5)
+    ), row=1, col=1)
     fig.add_trace(go.Bar(
         x=hist.index, y=hist['Volume'], name='Volume',
-        marker_color='rgba(107,114,128,0.4)', showlegend=False
+        marker_color=volume_colors, showlegend=False
     ), row=2, col=1)
     fig.update_layout(
         title=f"{ticker}{period_text}",
