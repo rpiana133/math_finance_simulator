@@ -286,10 +286,15 @@ def load_student_profile(email):
 
 def save_student_profile(email, profile):
     try:
+        payload = json.dumps(profile, indent=4)
+    except Exception as e:
+        st.error(f"JSON serialization error: {e}")
+        return
+    try:
         storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
-        blob.upload_from_string(json.dumps(profile, indent=4), content_type='application/json')
+        blob.upload_from_string(payload, content_type='application/json')
     except Exception as e:
         st.error(f"GCS save error: {e}")
         if 'profiles_cache' not in st.session_state:
