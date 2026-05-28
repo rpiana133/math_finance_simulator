@@ -180,12 +180,7 @@ CUSTOM_CSS = """
     
     /* Hide default streamlit header */
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
-</style>
-<script>
-const o=new MutationObserver(m=>{m.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===1){n.querySelectorAll('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]').forEach(f);if(n.matches&&n.matches('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]'))f(n)}})})});
-function f(e){e.style.setProperty('background-color','#ffffff','important');e.style.setProperty('color','#000000','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#ffffff','important');o.style.setProperty('color','#000000','important')})}
-o.observe(document.body,{childList:true,subtree:true});
-</script>"""
+</style>"""
 
 # ==========================================
 # 1. GOOGLE OAUTH2 AUTHENTICATION GATING
