@@ -376,8 +376,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Portfolio summary bar
-day_change_str = f"+${total_portfolio_return:.2f}" if total_portfolio_return >= 0 else f"${total_portfolio_return:.2f}"
-day_class = "positive" if total_portfolio_return >= 0 else "negative"
 st.markdown(f"""
 <div class="psummary">
     <div class="item">
