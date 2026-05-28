@@ -371,40 +371,35 @@ def _flatten_cols(df):
         df.columns = df.columns.get_level_values(0)
     return df
 
+@st.cache_data(ttl=600)
 def fetch_stock_market_data(ticker):
     try:
         data = _flatten_cols(yf.download(ticker, period="1y", progress=False))
         if data.empty:
-            st.warning(f"1y empty for {ticker}, trying 6mo")
             data = _flatten_cols(yf.download(ticker, period="6mo", progress=False))
         if data.empty:
-            st.warning(f"6mo empty for {ticker}, trying 1mo")
             data = _flatten_cols(yf.download(ticker, period="1mo", progress=False))
         if data.empty:
-            st.warning(f"All periods empty for {ticker}")
             return None, None, None
         close_price = float(data['Close'].squeeze().iloc[-1])
         try:
             info = yf.Ticker(ticker).info
             company_name = info.get('shortName') or info.get('longName') or ticker
-        except Exception as e:
-            st.warning(f"Ticker info failed for {ticker}: {e}")
+        except Exception:
             company_name = ticker
         recent = data.tail(10) if len(data) >= 10 else data
         return close_price, recent, company_name
-    except Exception as e:
-        st.warning(f"fetch_stock_market_data error for {ticker}: {e}")
+    except Exception:
         return None, None, None
 
+@st.cache_data(ttl=600)
 def fetch_full_history(ticker, period="3mo"):
     try:
         data = _flatten_cols(yf.download(ticker, period=period, progress=False))
         if data.empty:
-            st.warning(f"fetch_full_history: {period} empty for {ticker}")
             return None
         return data
-    except Exception as e:
-        st.warning(f"fetch_full_history error for {ticker}: {e}")
+    except Exception:
         return None
 
 total_holding_value = 0.0
@@ -426,8 +421,6 @@ for ticker, position in list(student_holdings.items()):
             "Total Value": f"${current_val:.2f}",
             "Percentage Return": f"{pct_return:+.2f}%"
         })
-    else:
-        st.warning(f"Price unavailable for {ticker}")
 
 total_portfolio_value = student_cash + total_holding_value
 total_pl_dollars = total_portfolio_value - 1000.00
