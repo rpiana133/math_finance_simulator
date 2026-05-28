@@ -371,10 +371,13 @@ def fetch_stock_market_data(ticker):
     try:
         data = yf.download(ticker, period="1y", progress=False)
         if data.empty:
+            print(f"fetch_stock_market_data: 1y empty for {ticker}, trying 6mo")
             data = yf.download(ticker, period="6mo", progress=False)
         if data.empty:
+            print(f"fetch_stock_market_data: 6mo empty for {ticker}, trying 1mo")
             data = yf.download(ticker, period="1mo", progress=False)
         if data.empty:
+            print(f"fetch_stock_market_data: all periods empty for {ticker}")
             return None, None, None
         close_price = float(data['Close'].iloc[-1])
         try:
@@ -385,6 +388,7 @@ def fetch_stock_market_data(ticker):
         recent = data.tail(10) if len(data) >= 10 else data
         return close_price, recent, company_name
     except Exception as e:
+        print(f"fetch_stock_market_data error for {ticker}: {e}")
         return None, None, None
 
 @st.cache_data(ttl=600)
@@ -392,9 +396,11 @@ def fetch_full_history(ticker, period="3mo"):
     try:
         data = yf.download(ticker, period=period, progress=False)
         if data.empty:
+            print(f"fetch_full_history: {period} empty for {ticker}")
             return None
         return data
-    except Exception:
+    except Exception as e:
+        print(f"fetch_full_history error for {ticker}: {e}")
         return None
 
 total_holding_value = 0.0
