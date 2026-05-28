@@ -18,41 +18,41 @@ CUSTOM_CSS = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', -apple-system, sans-serif; }
-    .stApp { background: #e5e7eb; }
+    .stApp { background: #f8f9fa; }
     .block-container { padding: 1rem 2rem !important; }
     
-    /* All text base */
+    /* All text base - soft dark */
     p, li, .markdown-text-container, .stMarkdown, .stWrite, div {
-        color: #0a0a0a;
+        color: #2d3748;
     }
-    .st-cb, .st-c0, .st-bx, .st-bz { color: #0a0a0a !important; }
     
-    /* Top nav bar */
+    /* Top nav bar - light blue */
     .topbar {
-        background: #0a1f33;
+        background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
         padding: 0.75rem 1.5rem;
         border-radius: 8px;
         margin-bottom: 1rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        color: #ffffff;
+        color: #1a365d;
+        border: 1px solid #c4d8f0;
     }
-    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#ffffff; }
+    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#1a365d; }
     .topbar .user-badge {
         display:flex; align-items:center; gap:8px;
-        background: rgba(255,255,255,0.12); padding: 4px 14px; border-radius: 20px;
-        font-size:0.85rem; color:#e5e7eb;
+        background: rgba(255,255,255,0.6); padding: 4px 14px; border-radius: 20px;
+        font-size:0.85rem; color:#2d3748;
     }
     
     /* Portfolio summary bar */
     .psummary {
         display: flex; gap: 2rem; margin-bottom: 1.2rem;
         background: #ffffff; padding: 1rem 1.5rem; border-radius: 8px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        border: 1px solid #e2e8f0;
     }
-    .psummary .label { font-size:0.75rem; color:#374151; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
-    .psummary .value { font-size:1.5rem; font-weight:700; color:#000000; }
+    .psummary .label { font-size:0.75rem; color:#4a5568; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+    .psummary .value { font-size:1.5rem; font-weight:700; color:#1a202c; }
     .psummary .value.positive { color:#059669; }
     .psummary .value.negative { color:#dc2626; }
     .psummary .sub { font-size:0.85rem; font-weight:600; }
@@ -62,58 +62,58 @@ CUSTOM_CSS = """
     /* Cards */
     .card {
         background: #ffffff; border-radius: 8px; padding: 1.25rem;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.12); margin-bottom: 1rem;
+        border: 1px solid #e2e8f0; margin-bottom: 1rem;
     }
-    .card h3 { margin:0 0 0.75rem 0; font-size:1rem; font-weight:700; color:#000000; }
+    .card h3 { margin:0 0 0.75rem 0; font-size:1rem; font-weight:700; color:#1a202c; }
     
     /* Data table */
     .dataframe { font-size:0.85rem; }
-    .stAgGrid, [data-testid="stDataFrame"] { color:#000000 !important; font-size:0.9rem !important; }
+    .stAgGrid, [data-testid="stDataFrame"] { color:#1a202c !important; font-size:0.9rem !important; }
     [data-testid="stDataFrame"] td,
-    [data-testid="stDataFrame"] th { color:#000000 !important; }
+    [data-testid="stDataFrame"] th { color:#1a202c !important; }
     
     /* Metric boxes */
     .metric-row { display:flex; gap:1rem; margin-bottom:1rem; }
     .metric-box {
         background: #ffffff; border-radius:8px; padding:0.75rem 1rem; flex:1;
-        box-shadow:0 1px 4px rgba(0,0,0,0.12);
+        border: 1px solid #e2e8f0;
     }
-    .metric-box .m-label { font-size:0.75rem; color:#374151; text-transform:uppercase; font-weight:600; letter-spacing:0.3px; }
-    .metric-box .m-value { font-size:1.1rem; font-weight:700; color:#000000; }
+    .metric-box .m-label { font-size:0.75rem; color:#4a5568; text-transform:uppercase; font-weight:600; letter-spacing:0.3px; }
+    .metric-box .m-value { font-size:1.1rem; font-weight:700; color:#1a202c; }
     
     /* Buttons */
     .stButton button {
-        font-weight:600; border-radius:6px; font-size:0.85rem;
-        transition: all 0.15s ease; border: 1px solid #d1d5db;
+        font-weight:600; border-radius:6px; font-size:0.85rem; color:#1a202c !important;
+        transition: all 0.15s ease; border: 1px solid #cbd5e0; background: #ffffff;
     }
     .stButton button:active { transform:scale(0.97); }
     .stButton button[kind="primary"] {
-        background: #2563eb; border: 1px solid #2563eb; color: #ffffff !important;
+        background: #3182ce; border: 1px solid #3182ce; color: #ffffff !important;
     }
     
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e5e7eb; }
-    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#1f2937 !important; }
-    .stTabs [aria-selected="true"] { background:#2563eb !important; color:#ffffff !important; font-weight:600 !important; }
+    .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e2e8f0; }
+    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#4a5568 !important; }
+    .stTabs [aria-selected="true"] { background:#3182ce !important; color:#ffffff !important; font-weight:600 !important; }
     
     /* Selectbox / Input labels */
     .stSelectbox label, .stNumberInput label, .stRadio label {
-        color: #0a0a0a !important; font-weight:600 !important; font-size:0.85rem !important;
+        color: #2d3748 !important; font-weight:600 !important; font-size:0.85rem !important;
     }
-    .stSelectbox div[data-baseweb="select"] span { color:#000000 !important; }
+    .stSelectbox div[data-baseweb="select"] span { color:#1a202c !important; }
     .stSelectbox div[data-baseweb="select"] {
-        background: #ffffff !important; border: 1px solid #9ca3af !important; border-radius: 6px !important;
+        background: #ffffff !important; border: 1px solid #cbd5e0 !important; border-radius: 6px !important;
     }
-    .stSelectbox div[data-baseweb="select"]:hover { border-color: #2563eb !important; }
+    .stSelectbox div[data-baseweb="select"]:hover { border-color: #3182ce !important; }
     div[data-baseweb="popover"], div[data-baseweb="menu"] {
-        background: #fff8e7 !important; border: 1px solid #d1d5db !important;
-        border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        background: #fff8e7 !important; border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
     }
     div[data-baseweb="popover"] ul, div[data-baseweb="menu"] ul {
         background: #fff8e7 !important; padding: 4px 0 !important;
     }
     div[data-baseweb="popover"] li, div[data-baseweb="menu"] li {
-        color: #000000 !important; font-size: 0.9rem !important; padding: 8px 12px !important;
+        color: #1a202c !important; font-size: 0.9rem !important; padding: 8px 12px !important;
         background: #fff8e7 !important;
     }
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: #fde8c8 !important; }
@@ -121,15 +121,22 @@ CUSTOM_CSS = """
         background: #fcd9a0 !important; font-weight:600 !important;
     }
     
+    /* Number input */
+    .stNumberInput input {
+        background: #ffffff !important; border: 1px solid #cbd5e0 !important;
+        border-radius: 6px !important; color: #1a202c !important;
+    }
+    .stNumberInput input:focus { border-color: #3182ce !important; box-shadow: 0 0 0 2px rgba(49,130,206,0.15) !important; }
+    
     /* Info / Warning / Error boxes */
     .stAlert { border-left: 4px solid; }
-    .stAlert p { color: #0a0a0a !important; }
-
+    .stAlert p { color: #2d3748 !important; }
+    
     /* Caption text */
     .stCaption, .element-container div.small-font, [data-testid="stCaption"] {
-        color: #374151 !important; font-size:0.8rem !important;
+        color: #4a5568 !important; font-size:0.8rem !important;
     }
-
+    
     /* Dividers */
     .stDivider { margin:1rem 0; }
     
