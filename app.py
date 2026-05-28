@@ -853,7 +853,7 @@ POPULAR_STOCKS = {
     "PSI": "Invesco Dynamic Semiconductors ETF"
 }
 
-ALL_TICKERS = list(POPULAR_STOCKS.keys())
+ALL_TICKERS = sorted(POPULAR_STOCKS.keys())
 
 def get_company_name(ticker):
     return POPULAR_STOCKS.get(ticker, ticker)
