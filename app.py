@@ -366,22 +366,23 @@ CHART_PERIODS = {
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
 }
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def fetch_stock_market_data(ticker):
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
-        live_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
-        company_name = info.get('shortName') or info.get('longName') or ticker
-        if live_price:
+        hist = stock.history(period="5d")
+        if hist.empty:
             hist = stock.history(period="1mo")
-            if not hist.empty:
-                return float(live_price), hist.tail(10), company_name
-        for period in ["5d", "1d"]:
-            hist = stock.history(period=period)
-            if not hist.empty:
-                return float(hist['Close'].iloc[-1]), hist.tail(10), company_name
-        return None, None, None
+        if hist.empty:
+            return None, None, None
+        live_price = float(hist['Close'].iloc[-1])
+        try:
+            info = stock.info
+            company_name = info.get('shortName') or info.get('longName') or ticker
+        except Exception:
+            company_name = ticker
+        recent = hist.tail(10) if len(hist) >= 10 else hist
+        return live_price, recent, company_name
     except Exception:
         return None, None, None
 
