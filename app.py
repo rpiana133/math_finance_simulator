@@ -10,6 +10,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request as AuthReq
+from google.auth import crypt
 from googleapiclient.discovery import build
 from google.cloud import storage
 import plotly.graph_objects as go
@@ -288,6 +289,7 @@ def _gcs_creds():
 @st.cache_resource(ttl=1500)
 def _gcs_token():
     key_info = _gcs_creds()
+    signer = crypt.RSASigner.from_service_account_info(key_info)
     now = int(time.time())
     jwt_payload = {
         "iss": key_info["client_email"],
@@ -297,7 +299,7 @@ def _gcs_token():
         "iat": now
     }
     from google.auth import jwt as google_jwt
-    assertion = google_jwt.encode(key_info, jwt_payload)
+    assertion = google_jwt.encode(signer, jwt_payload, key_id=key_info.get("private_key_id"))
     resp = requests.post("https://oauth2.googleapis.com/token", data={
         "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
         "assertion": assertion
