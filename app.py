@@ -366,19 +366,24 @@ CHART_PERIODS = {
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
 }
 
+def _flatten_cols(df):
+    if df is not None and isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
 def fetch_stock_market_data(ticker):
     try:
-        data = yf.download(ticker, period="1y", progress=False)
+        data = _flatten_cols(yf.download(ticker, period="1y", progress=False))
         if data.empty:
             st.warning(f"1y empty for {ticker}, trying 6mo")
-            data = yf.download(ticker, period="6mo", progress=False)
+            data = _flatten_cols(yf.download(ticker, period="6mo", progress=False))
         if data.empty:
             st.warning(f"6mo empty for {ticker}, trying 1mo")
-            data = yf.download(ticker, period="1mo", progress=False)
+            data = _flatten_cols(yf.download(ticker, period="1mo", progress=False))
         if data.empty:
             st.warning(f"All periods empty for {ticker}")
             return None, None, None
-        close_price = float(data['Close'].iloc[-1])
+        close_price = float(data['Close'].squeeze().iloc[-1])
         try:
             info = yf.Ticker(ticker).info
             company_name = info.get('shortName') or info.get('longName') or ticker
@@ -393,7 +398,7 @@ def fetch_stock_market_data(ticker):
 
 def fetch_full_history(ticker, period="3mo"):
     try:
-        data = yf.download(ticker, period=period, progress=False)
+        data = _flatten_cols(yf.download(ticker, period=period, progress=False))
         if data.empty:
             st.warning(f"fetch_full_history: {period} empty for {ticker}")
             return None
