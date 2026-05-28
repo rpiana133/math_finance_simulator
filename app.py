@@ -485,7 +485,7 @@ with main_tab2:
         if hist is not None and len(hist) > 5:
             fig = plot_candlestick(chart_trade_ticker, hist)
             fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="trade_chart")
         else:
             st.info("Not enough data to chart.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -526,7 +526,7 @@ with main_tab3:
         if hist2 is not None and len(hist2) > 5:
             fig2 = plot_candlestick(chart_ticker2, hist2)
             fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, use_container_width=True, key="research_chart")
         else:
             st.info("Not enough historical data.")
         st.markdown('</div>', unsafe_allow_html=True)
