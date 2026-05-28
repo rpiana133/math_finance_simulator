@@ -106,14 +106,14 @@ CUSTOM_CSS = """
     }
     .stSelectbox div[data-baseweb="select"]:hover { border-color: #2563eb !important; }
     div[data-baseweb="menu"] {
-        background: #ffffff !important; border: 1px solid #d1d5db !important;
+        background: #fef9e7 !important; border: 1px solid #d1d5db !important;
         border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
     }
     div[data-baseweb="menu"] li {
         color: #000000 !important; font-size: 0.9rem !important; padding: 8px 12px !important;
     }
-    div[data-baseweb="menu"] li:hover { background: #eff6ff !important; }
-    div[data-baseweb="menu"] li[aria-selected="true"] { background: #dbeafe !important; }
+    div[data-baseweb="menu"] li:hover { background: #fdecc8 !important; }
+    div[data-baseweb="menu"] li[aria-selected="true"] { background: #fce4b4 !important; font-weight:600 !important; }
     
     /* Info / Warning / Error boxes */
     .stAlert { border-left: 4px solid; }
