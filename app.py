@@ -366,34 +366,34 @@ CHART_PERIODS = {
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
 }
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def fetch_stock_market_data(ticker):
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="5d")
-        if hist.empty:
-            hist = stock.history(period="1mo")
-        if hist.empty:
+        data = yf.download(ticker, period="1y", progress=False)
+        if data.empty:
+            data = yf.download(ticker, period="6mo", progress=False)
+        if data.empty:
+            data = yf.download(ticker, period="1mo", progress=False)
+        if data.empty:
             return None, None, None
-        close_price = float(hist['Close'].iloc[-1])
+        close_price = float(data['Close'].iloc[-1])
         try:
-            info = stock.info
+            info = yf.Ticker(ticker).info
             company_name = info.get('shortName') or info.get('longName') or ticker
         except Exception:
             company_name = ticker
-        recent = hist.tail(10) if len(hist) >= 10 else hist
+        recent = data.tail(10) if len(data) >= 10 else data
         return close_price, recent, company_name
-    except Exception:
+    except Exception as e:
         return None, None, None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def fetch_full_history(ticker, period="3mo"):
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
-        if hist.empty:
+        data = yf.download(ticker, period=period, progress=False)
+        if data.empty:
             return None
-        return hist
+        return data
     except Exception:
         return None
 
