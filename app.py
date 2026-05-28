@@ -244,7 +244,11 @@ POPULAR_STOCKS = {
     "ARKQ": "ARK Autonomous Tech & Robotics ETF",
     "ARKW": "ARK Next Gen Internet ETF",
     "AIEQ": "Amplify AI Powered Equity ETF",
-    "CHAT": "Roundhill Generative AI ETF"
+    "CHAT": "Roundhill Generative AI ETF",
+    "SMH": "VanEck Semiconductor ETF",
+    "SOXX": "iShares Semiconductor ETF",
+    "SOXQ": "Invesco Semiconductor ETF",
+    "PSI": "Invesco Dynamic Semiconductors ETF"
 }
 
 ALL_TICKERS = list(POPULAR_STOCKS.keys())
