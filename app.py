@@ -311,12 +311,10 @@ def _gcs_token():
         st.error(f"OAuth2 token error: {e} | Status: {resp.status_code} | Body: {resp.text[:500]}")
         raise
 
-def _gcs_url(path):
-    return f"https://{GCS_BUCKET_NAME}.storage.googleapis.com/{urllib.parse.quote(path)}"
-
 def _gcs_read(path):
     token = _gcs_token()
-    resp = requests.get(_gcs_url(path), headers={"Authorization": f"Bearer {token}"})
+    resp = requests.get(f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
+        headers={"Authorization": f"Bearer {token}"})
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -324,15 +322,17 @@ def _gcs_read(path):
 
 def _gcs_write(path, data):
     token = _gcs_token()
-    resp = requests.put(_gcs_url(path), data=data.encode('utf-8'), headers={
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    })
+    resp = requests.put(f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
+        data=data.encode('utf-8'), headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        })
     resp.raise_for_status()
 
 def _gcs_exists(path):
     token = _gcs_token()
-    resp = requests.get(_gcs_url(path), headers={"Authorization": f"Bearer {token}"})
+    resp = requests.get(f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
+        headers={"Authorization": f"Bearer {token}"})
     return resp.status_code == 200
 
 def get_gcs_client():
