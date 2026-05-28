@@ -154,7 +154,11 @@ POPULAR_STOCKS = {
     "VOO": "S&P 500 ETF (Vanguard)", "BND": "Total Bond Market ETF",
     "GLD": "Gold ETF", "SLV": "Silver ETF", "EEM": "Emerging Markets ETF",
     "XLF": "Financial Sector ETF", "XLK": "Tech Sector ETF",
-    "XLV": "Healthcare Sector ETF", "XLE": "Energy Sector ETF"
+    "XLV": "Healthcare Sector ETF", "XLE": "Energy Sector ETF",
+    "SCHD": "Dividend Equity ETF", "VIG": "Dividend Appreciation ETF",
+    "VYM": "High Dividend Yield ETF", "DGRO": "Dividend Growth ETF",
+    "SPYD": "S&P 500 High Dividend ETF", "NOBL": "Dividend Aristocrats ETF",
+    "SDY": "S&P Dividend ETF", "DVY": "Select Dividend ETF"
 }
 
 def get_company_name(ticker):
