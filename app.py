@@ -273,7 +273,11 @@ def load_student_profile(email):
     except Exception:
         if 'profiles_cache' not in st.session_state:
             st.session_state.profiles_cache = {}
-        return st.session_state.profiles_cache.get(email)
+        cached = st.session_state.profiles_cache.get(email)
+        if cached is not None:
+            return cached
+        st.warning("Could not load profile from cloud storage. Try again later.")
+        return None
 
 def save_student_profile(email, profile):
     try:
@@ -288,6 +292,22 @@ def save_student_profile(email, profile):
 
 # Load this student's profile
 student_profile = load_student_profile(student_email)
+if student_profile is None:
+    # Migration: try reading from the old monolithic file
+    try:
+        storage_client = get_gcs_client()
+        bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        old_blob = bucket.blob("classroom_portfolios.json")
+        if old_blob.exists():
+            old_data = json.loads(old_blob.download_as_text())
+            if student_email in old_data:
+                student_profile = old_data[student_email]
+                student_profile.setdefault("unsettled_cash", 0.0)
+                student_profile.setdefault("unsettled_entries", [])
+                save_student_profile(student_email, student_profile)
+    except Exception:
+        pass
+
 if student_profile is None:
     student_profile = {
         "name": st.session_state.user_info.get('name', 'Student'),
