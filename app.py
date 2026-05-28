@@ -16,8 +16,7 @@ st.set_page_config(page_title="Classroom Stock Simulator", page_icon="📈", lay
 
 CUSTOM_CSS = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', -apple-system, sans-serif; }
+    html, body, [class*="css"] { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     .stApp { background: #f8f9fa; }
     .block-container { padding: 1rem 2rem !important; }
     
@@ -115,16 +114,19 @@ CUSTOM_CSS = """
         border-color: #bbf7d0 !important;
     }
     div[data-baseweb="popover"], div[data-baseweb="menu"],
-    div[role="listbox"], ul[role="listbox"] {
+    div[role="listbox"], ul[role="listbox"],
+    .stSelectbox div[role="listbox"] {
         border: 1px solid #bbf7d0 !important;
         border-radius: 6px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
         padding: 4px 0 !important;
     }
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover,
-    li[role="option"]:hover, div[role="option"]:hover { background: #dcfce7 !important; }
+    li[role="option"]:hover, div[role="option"]:hover,
+    [data-baseweb="menu"] [role="option"]:hover { background: #dcfce7 !important; }
     div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"],
-    li[role="option"][aria-selected="true"], div[role="option"][aria-selected="true"] {
+    li[role="option"][aria-selected="true"], div[role="option"][aria-selected="true"],
+    [data-baseweb="menu"] [role="option"][aria-selected="true"] {
         background: #bbf7d0 !important; font-weight:600 !important;
     }
     
