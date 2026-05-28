@@ -294,10 +294,30 @@ if student_profile is None:
         "cash": 1000.00,
         "holdings": {},
         "alerts": [],
-        "history": []
+        "history": [],
+        "unsettled_cash": 0.0,
+        "unsettled_entries": []
     }
     save_student_profile(student_email, student_profile)
+
+# Settle any unsettled proceeds older than 24 hours
+now = datetime.now()
+unsettled_entries = student_profile.get("unsettled_entries", [])
+settled_amount = 0.0
+remaining = []
+for entry in unsettled_entries:
+    if (now - datetime.fromisoformat(entry["time"])).total_seconds() >= 86400:
+        settled_amount += entry["amount"]
+    else:
+        remaining.append(entry)
+if settled_amount > 0:
+    student_profile["cash"] = round(student_profile["cash"] + settled_amount, 2)
+    student_profile["unsettled_entries"] = remaining
+    student_profile["unsettled_cash"] = round(sum(e["amount"] for e in remaining), 2)
+    save_student_profile(student_email, student_profile)
+
 student_cash = student_profile["cash"]
+student_unsettled = student_profile.get("unsettled_cash", 0.0)
 student_holdings = student_profile["holdings"]
 student_alerts = student_profile.get("alerts", [])
 student_history = student_profile.get("history", [])
@@ -938,7 +958,7 @@ for ticker, position in list(student_holdings.items()):
             "Percentage Return": f"{pct_return:+.2f}%"
         })
 
-total_portfolio_value = student_cash + total_holding_value
+total_portfolio_value = student_cash + student_unsettled + total_holding_value
 total_pl_dollars = total_portfolio_value - 1000.00
 total_pl_pct = ((total_portfolio_value - 1000.00) / 1000.00) * 100
 pl_class = "positive" if total_pl_dollars >= 0 else "negative"
@@ -1034,6 +1054,11 @@ st.markdown(f"""
         <div class="value">${student_cash:,.2f}</div>
     </div>
     <div class="item">
+        <div class="label">Unsettled Cash</div>
+        <div class="value" style="color:#f59e0b;">${student_unsettled:,.2f}</div>
+        <div class="sub" style="color:#9ca3af;">settles in &lt;24h</div>
+    </div>
+    <div class="item">
         <div class="label">Portfolio Value</div>
         <div class="value">${total_holding_value:,.2f}</div>
     </div>
@@ -1060,6 +1085,9 @@ with main_tab1:
     if student_cash > 0:
         labels.append("Cash")
         values.append(student_cash)
+    if student_unsettled > 0:
+        labels.append("Unsettled")
+        values.append(student_unsettled)
     for ticker, pos in student_holdings.items():
         price, _, _ = fetch_stock_market_data(ticker)
         if price is not None:
@@ -1187,7 +1215,10 @@ with main_tab2:
                         profit = t['cost'] - cost_basis
                         tax = max(0, round(profit * 0.15, 2))
                         net_proceeds = t['cost'] - tax
-                        student_profile["cash"] = round(student_cash + net_proceeds, 2)
+                        student_profile["unsettled_cash"] = round(student_profile.get("unsettled_cash", 0.0) + net_proceeds, 2)
+                        entries = student_profile.get("unsettled_entries", [])
+                        entries.append({"amount": net_proceeds, "time": datetime.now().isoformat()})
+                        student_profile["unsettled_entries"] = entries
                         student_holdings[t['ticker']]['shares'] -= t['shares']
                         student_holdings[t['ticker']]['total_cost'] -= cost_basis
                         if student_holdings[t['ticker']]['shares'] < 0.0001:
