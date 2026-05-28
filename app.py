@@ -88,13 +88,13 @@ CUSTOM_CSS = """
     }
     .stButton button:active { transform:scale(0.97); }
     .stButton button[kind="primary"] {
-        background: #0a1f33; border: 1px solid #0a1f33; color: #ffffff !important;
+        background: #2563eb; border: 1px solid #2563eb; color: #ffffff !important;
     }
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e5e7eb; }
-    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#374151 !important; }
-    .stTabs [aria-selected="true"] { background:#0a1f33 !important; color:#ffffff !important; }
+    .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#1f2937 !important; }
+    .stTabs [aria-selected="true"] { background:#2563eb !important; color:#ffffff !important; font-weight:600 !important; }
     
     /* Selectbox / Input labels */
     .stSelectbox label, .stNumberInput label, .stRadio label {
