@@ -28,17 +28,17 @@ CUSTOM_CSS = """
     
     /* Top nav bar - light blue */
     .topbar {
-        background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
         padding: 0.75rem 1.5rem;
         border-radius: 8px;
         margin-bottom: 1rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        color: #1a365d;
-        border: 1px solid #c4d8f0;
+        color: #14532d;
+        border: 1px solid #bbf7d0;
     }
-    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#1a365d; }
+    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#14532d; }
     .topbar .user-badge {
         display:flex; align-items:center; gap:8px;
         background: rgba(255,255,255,0.6); padding: 4px 14px; border-radius: 20px;
@@ -88,13 +88,13 @@ CUSTOM_CSS = """
     }
     .stButton button:active { transform:scale(0.97); }
     .stButton button[kind="primary"] {
-        background: #3182ce; border: 1px solid #3182ce; color: #ffffff !important;
+        background: #16a34a; border: 1px solid #16a34a; color: #ffffff !important;
     }
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e2e8f0; }
     .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#4a5568 !important; }
-    .stTabs [aria-selected="true"] { background:#3182ce !important; color:#ffffff !important; font-weight:600 !important; }
+    .stTabs [aria-selected="true"] { background:#16a34a !important; color:#ffffff !important; font-weight:600 !important; }
     
     /* Selectbox / Input labels */
     .stSelectbox label, .stNumberInput label, .stRadio label {
@@ -102,31 +102,31 @@ CUSTOM_CSS = """
     }
     .stSelectbox div[data-baseweb="select"] span { color:#1a202c !important; }
     .stSelectbox div[data-baseweb="select"] {
-        background: #ffffff !important; border: 1px solid #cbd5e0 !important; border-radius: 6px !important;
+        background: #f0fdf4 !important; border: 1px solid #86efac !important; border-radius: 6px !important;
     }
-    .stSelectbox div[data-baseweb="select"]:hover { border-color: #3182ce !important; }
+    .stSelectbox div[data-baseweb="select"]:hover { border-color: #22c55e !important; }
     div[data-baseweb="popover"], div[data-baseweb="menu"] {
-        background: #fff8e7 !important; border: 1px solid #e2e8f0 !important;
+        background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important;
         border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
     }
     div[data-baseweb="popover"] ul, div[data-baseweb="menu"] ul {
-        background: #fff8e7 !important; padding: 4px 0 !important;
+        background: #f0fdf4 !important; padding: 4px 0 !important;
     }
     div[data-baseweb="popover"] li, div[data-baseweb="menu"] li {
         color: #1a202c !important; font-size: 0.9rem !important; padding: 8px 12px !important;
-        background: #fff8e7 !important;
+        background: #f0fdf4 !important;
     }
-    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: #fde8c8 !important; }
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: #dcfce7 !important; }
     div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"] {
-        background: #fcd9a0 !important; font-weight:600 !important;
+        background: #bbf7d0 !important; font-weight:600 !important;
     }
     
     /* Number input */
     .stNumberInput input {
-        background: #ffffff !important; border: 1px solid #cbd5e0 !important;
+        background: #f0fdf4 !important; border: 1px solid #86efac !important;
         border-radius: 6px !important; color: #1a202c !important;
     }
-    .stNumberInput input:focus { border-color: #3182ce !important; box-shadow: 0 0 0 2px rgba(49,130,206,0.15) !important; }
+    .stNumberInput input:focus { border-color: #22c55e !important; box-shadow: 0 0 0 2px rgba(34,197,94,0.2) !important; }
     
     /* Info / Warning / Error boxes */
     .stAlert { border-left: 4px solid; }
