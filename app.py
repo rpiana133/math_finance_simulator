@@ -253,7 +253,7 @@ if st.session_state.credentials is None:
 # ==========================================
 # REPLACE THIS WITH YOUR ACTUAL GOOGLE CLOUD STORAGE BUCKET NAME
 GCS_BUCKET_NAME = "math_finance_simulator" 
-BLOB_NAME = "classroom_portfolios.json"
+BLOB_PREFIX = "portfolios/"
 student_email = st.session_state.user_info['email']
 
 def get_gcs_client():
@@ -261,47 +261,42 @@ def get_gcs_client():
     creds = service_account.Credentials.from_service_account_info(key_info)
     return storage.Client(credentials=creds, project=key_info.get("project_id"))
 
-def get_gcs_database():
-    """Fetches the global student portfolio database ledger from Google Cloud Storage."""
+def load_student_profile(email):
     try:
         storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(BLOB_NAME)
-        
+        blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
         if not blob.exists():
-            return {}
-        
+            return None
         data = blob.download_as_text()
         return json.loads(data)
     except Exception:
-        # Fallback cache to keep app operational if bucket permissions are still propagating
-        if 'fallback_db' not in st.session_state:
-            st.session_state.fallback_db = {}
-        return st.session_state.fallback_db
+        if 'profiles_cache' not in st.session_state:
+            st.session_state.profiles_cache = {}
+        return st.session_state.profiles_cache.get(email)
 
-def save_gcs_database(db_data):
-    """Saves the updated database ledger back up to Google Cloud Storage."""
+def save_student_profile(email, profile):
     try:
         storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(BLOB_NAME)
-        blob.upload_from_string(json.dumps(db_data, indent=4), content_type='application/json')
+        blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
+        blob.upload_from_string(json.dumps(profile, indent=4), content_type='application/json')
     except Exception:
-        st.session_state.fallback_db = db_data
+        if 'profiles_cache' not in st.session_state:
+            st.session_state.profiles_cache = {}
+        st.session_state.profiles_cache[email] = profile
 
-# Extract or Initialize this specific student's cloud profile
-global_database = get_gcs_database()
-if student_email not in global_database:
-    global_database[student_email] = {
+# Load this student's profile
+student_profile = load_student_profile(student_email)
+if student_profile is None:
+    student_profile = {
         "name": st.session_state.user_info.get('name', 'Student'),
         "cash": 1000.00,
         "holdings": {},
         "alerts": [],
         "history": []
     }
-    save_gcs_database(global_database)
-
-student_profile = global_database[student_email]
+    save_student_profile(student_email, student_profile)
 student_cash = student_profile["cash"]
 student_holdings = student_profile["holdings"]
 student_alerts = student_profile.get("alerts", [])
@@ -317,11 +312,11 @@ if last_deposit_str:
         deposit_amount = weeks_passed * 100
         student_profile["cash"] = round(student_cash + deposit_amount, 2)
         student_profile["last_weekly_deposit"] = now.isoformat()
-        save_gcs_database(global_database)
+        save_student_profile(student_email, student_profile)
         st.success(f"💰 Weekly deposit: +${deposit_amount:.2f} ({weeks_passed} week{'s' if weeks_passed > 1 else ''})")
 else:
     student_profile["last_weekly_deposit"] = now.isoformat()
-    save_gcs_database(global_database)
+    save_student_profile(student_email, student_profile)
 
 # Refresh local variables after potential deposit
 student_cash = student_profile["cash"]
@@ -1107,8 +1102,7 @@ with main_tab2:
                             "price": round(live_price, 2), "total": round(actual_cost, 2),
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
-                        global_database[student_email] = student_profile
-                        save_gcs_database(global_database)
+                        save_student_profile(student_email, student_profile)
                         st.success(f"Bought {shares_to_trade:.4f} shares of {trade_ticker}!")
                         st.rerun()
                 elif action == "Sell":
@@ -1128,8 +1122,7 @@ with main_tab2:
                             "price": round(live_price, 2), "total": round(proceeds, 2),
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
-                        global_database[student_email] = student_profile
-                        save_gcs_database(global_database)
+                        save_student_profile(student_email, student_profile)
                         msg = f"Sold shares of {trade_ticker}!"
                         if tax > 0:
                             msg += f" (15% profit tax: -${tax:.2f})"
@@ -1226,8 +1219,7 @@ with main_tab4:
             new_alert = {"ticker": alert_ticker, "direction": alert_direction, "price": alert_price}
             student_alerts.append(new_alert)
             student_profile["alerts"] = student_alerts
-            global_database[student_email] = student_profile
-            save_gcs_database(global_database)
+            save_student_profile(student_email, student_profile)
             st.success(f"Alert set!")
             st.rerun()
     if student_alerts:
@@ -1240,7 +1232,6 @@ with main_tab4:
             if c4.button("✕", key=f"del_alert_{i}", use_container_width=True):
                 student_alerts.pop(i)
                 student_profile["alerts"] = student_alerts
-                global_database[student_email] = student_profile
-                save_gcs_database(global_database)
+                save_student_profile(student_email, student_profile)
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
