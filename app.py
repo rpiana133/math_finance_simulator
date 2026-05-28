@@ -138,23 +138,49 @@ student_alerts = student_profile.get("alerts", [])
 # ==========================================
 # 3. STOCK DATA & REAL-TIME MATHEMATICS ENGINE
 # ==========================================
+POPULAR_STOCKS = {
+    "AAPL": "Apple Inc.", "MSFT": "Microsoft", "GOOGL": "Alphabet (Google)",
+    "AMZN": "Amazon", "NVDA": "NVIDIA", "META": "Meta (Facebook)",
+    "TSLA": "Tesla", "BRK-B": "Berkshire Hathaway", "JPM": "JPMorgan Chase",
+    "V": "Visa", "JNJ": "Johnson & Johnson", "WMT": "Walmart",
+    "MA": "Mastercard", "PG": "Procter & Gamble", "UNH": "UnitedHealth",
+    "HD": "Home Depot", "DIS": "Disney", "BAC": "Bank of America",
+    "NFLX": "Netflix", "ADBE": "Adobe", "CRM": "Salesforce",
+    "PEP": "PepsiCo", "KO": "Coca-Cola", "INTC": "Intel",
+    "AMD": "AMD", "PYPL": "PayPal", "UBER": "Uber",
+    "SQ": "Block (Square)", "SNAP": "Snapchat", "PLTR": "Palantir"
+}
+
+def get_company_name(ticker):
+    return POPULAR_STOCKS.get(ticker, ticker)
+
+def format_ticker_option(ticker):
+    name = POPULAR_STOCKS.get(ticker)
+    if name:
+        return f"{ticker} — {name}"
+    return ticker
+
+def parse_ticker_option(display_str):
+    return display_str.split(" —")[0].strip()
+
 @st.cache_data(ttl=60)
 def fetch_stock_market_data(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
         live_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
+        company_name = info.get('shortName') or info.get('longName') or ticker
         if live_price:
             hist = stock.history(period="1mo")
             if not hist.empty:
-                return float(live_price), hist.tail(10)
+                return float(live_price), hist.tail(10), company_name
         for period in ["5d", "1d"]:
             hist = stock.history(period=period)
             if not hist.empty:
-                return float(hist['Close'].iloc[-1]), hist.tail(10)
-        return None, None
+                return float(hist['Close'].iloc[-1]), hist.tail(10), company_name
+        return None, None, None
     except Exception:
-        return None, None
+        return None, None, None
 
 @st.cache_data(ttl=300)
 def fetch_full_history(ticker, period="3mo"):
@@ -171,7 +197,7 @@ total_holding_value = 0.0
 live_portfolio_data = []
 
 for ticker, position in list(student_holdings.items()):
-    live_price, _ = fetch_stock_market_data(ticker)
+    live_price, _, _ = fetch_stock_market_data(ticker)
     if live_price is not None:
         current_val = position['shares'] * live_price
         total_holding_value += current_val
@@ -197,7 +223,7 @@ def check_and_trigger_alerts():
     triggered = []
     for alert in student_alerts:
         ticker = alert["ticker"]
-        price, _ = fetch_stock_market_data(ticker)
+        price, _, _ = fetch_stock_market_data(ticker)
         if price is None:
             continue
         direction = alert["direction"]
@@ -252,12 +278,28 @@ col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
     st.header("📝 Transaction Module")
-    trade_ticker = st.text_input("Enter NASDAQ Ticker Symbol", value="AAPL").upper().strip()
+    
+    all_options = list(POPULAR_STOCKS.keys())
+    for t in student_holdings:
+        if t not in all_options:
+            all_options.append(t)
+    display_options = [format_ticker_option(t) for t in all_options]
+    
+    selected_display = st.selectbox("Select Stock", options=display_options, index=0)
+    trade_ticker = parse_ticker_option(selected_display)
+    
+    live_price, _, company = fetch_stock_market_data(trade_ticker)
+    
+    if live_price is not None:
+        st.info(f"**{company}** — Current Price: **${live_price:.2f}**")
+    else:
+        st.warning(f"Price unavailable for {trade_ticker}")
+    
     action = st.radio("Select Order Action", ["Buy", "Sell"], horizontal=True)
     usd_allocation = st.number_input("Amount to Invest ($)", min_value=1.00, value=100.00, step=10.00)
     
     if st.button("Execute Order"):
-        live_price, _ = fetch_stock_market_data(trade_ticker)
+        live_price, _, company = fetch_stock_market_data(trade_ticker)
         if live_price is None:
             st.error(f"Execution Error: Ticker '{trade_ticker}' not found.")
         else:
@@ -309,7 +351,7 @@ with col_right:
         analyzer_options = list(student_holdings.keys()) if student_holdings else ["AAPL", "MSFT", "GOOGL"]
         selected_analysis_ticker = st.selectbox("Select Asset", options=analyzer_options, key="vol_ticker")
         
-        _, historical_data = fetch_stock_market_data(selected_analysis_ticker)
+        _, historical_data, _ = fetch_stock_market_data(selected_analysis_ticker)
         
         if historical_data is not None and len(historical_data) >= 2:
             historical_data['Daily Change (%)'] = historical_data['Close'].pct_change() * 100
@@ -352,7 +394,8 @@ st.header("🔔 Price Alerts")
 st.caption("Set alerts to notify you when a stock reaches a target price.")
 a_col1, a_col2, a_col3 = st.columns([2, 1, 1])
 with a_col1:
-    alert_ticker = st.text_input("Ticker", value="AAPL", key="alert_ticker").upper().strip()
+    alert_selected = st.selectbox("Stock", options=display_options, key="alert_sel")
+    alert_ticker = parse_ticker_option(alert_selected)
 with a_col2:
     alert_direction = st.selectbox("Direction", ["above", "below"], key="alert_dir")
 with a_col3:
