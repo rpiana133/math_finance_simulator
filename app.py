@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import json
+import time
 import urllib.parse
 import requests
 from google_auth_oauthlib.flow import Flow
@@ -260,13 +261,35 @@ BLOB_PREFIX = "portfolios/"
 student_email = st.session_state.user_info['email']
 
 @st.cache_resource(ttl=1800)
+def _gcs_creds():
+    raw = st.secrets["GCS_SERVICE_ACCOUNT"]
+    if isinstance(raw, dict):
+        return raw
+    return json.loads(raw)
+
+@st.cache_resource(ttl=1500)
 def _gcs_token():
-    key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
-    creds = service_account.Credentials.from_service_account_info(
-        key_info, scopes=["https://www.googleapis.com/auth/devstorage.read_write"]
-    )
-    creds.refresh(AuthReq())
-    return creds.token
+    key_info = _gcs_creds()
+    now = int(time.time())
+    jwt_payload = {
+        "iss": key_info["client_email"],
+        "scope": "https://www.googleapis.com/auth/devstorage.read_write",
+        "aud": "https://oauth2.googleapis.com/token",
+        "exp": now + 3600,
+        "iat": now
+    }
+    from google.auth import jwt as google_jwt
+    assertion = google_jwt.encode(key_info, jwt_payload)
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "assertion": assertion
+    })
+    try:
+        resp.raise_for_status()
+        return resp.json()["access_token"]
+    except Exception as e:
+        st.error(f"OAuth2 token error: {e} | Status: {resp.status_code} | Body: {resp.text[:500]}")
+        raise
 
 def _gcs_read(path):
     token = _gcs_token()
