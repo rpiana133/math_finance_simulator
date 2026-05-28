@@ -161,6 +161,9 @@ POPULAR_STOCKS = {
     "SDY": "S&P Dividend ETF", "DVY": "Select Dividend ETF"
 }
 
+ALL_TICKERS = list(POPULAR_STOCKS.keys())
+DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
+
 def get_company_name(ticker):
     return POPULAR_STOCKS.get(ticker, ticker)
 
@@ -288,14 +291,7 @@ col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
     st.header("📝 Transaction Module")
-    
-    all_options = list(POPULAR_STOCKS.keys())
-    for t in student_holdings:
-        if t not in all_options:
-            all_options.append(t)
-    display_options = [format_ticker_option(t) for t in all_options]
-    
-    selected_display = st.selectbox("Select Stock", options=display_options, index=0)
+    selected_display = st.selectbox("Select Stock", options=DISPLAY_OPTIONS, index=0)
     trade_ticker = parse_ticker_option(selected_display)
     
     live_price, _, company = fetch_stock_market_data(trade_ticker)
@@ -358,8 +354,8 @@ with col_right:
     
     with tab1:
         st.header("Volatility Calculator")
-        analyzer_options = list(student_holdings.keys()) if student_holdings else ["AAPL", "MSFT", "GOOGL"]
-        selected_analysis_ticker = st.selectbox("Select Asset", options=analyzer_options, key="vol_ticker")
+        selected_analysis_display = st.selectbox("Select Asset", options=DISPLAY_OPTIONS, key="vol_ticker")
+        selected_analysis_ticker = parse_ticker_option(selected_analysis_display)
         
         _, historical_data, _ = fetch_stock_market_data(selected_analysis_ticker)
         
@@ -380,11 +376,8 @@ with col_right:
             st.info("Awaiting market records.")
     
     with tab2:
-        chart_ticker = st.selectbox(
-            "Select Asset", 
-            options=list(student_holdings.keys()) if student_holdings else ["AAPL", "MSFT", "GOOGL"],
-            key="chart_ticker"
-        )
+        chart_display = st.selectbox("Select Asset", options=DISPLAY_OPTIONS, key="chart_ticker")
+        chart_ticker = parse_ticker_option(chart_display)
         hist = fetch_full_history(chart_ticker)
         if hist is not None and len(hist) > 5:
             fig = plot_candlestick(chart_ticker, hist)
@@ -404,7 +397,7 @@ st.header("🔔 Price Alerts")
 st.caption("Set alerts to notify you when a stock reaches a target price.")
 a_col1, a_col2, a_col3 = st.columns([2, 1, 1])
 with a_col1:
-    alert_selected = st.selectbox("Stock", options=display_options, key="alert_sel")
+    alert_selected = st.selectbox("Stock", options=DISPLAY_OPTIONS, key="alert_sel")
     alert_ticker = parse_ticker_option(alert_selected)
 with a_col2:
     alert_direction = st.selectbox("Direction", ["above", "below"], key="alert_dir")
