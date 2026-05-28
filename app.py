@@ -27,17 +27,17 @@ CUSTOM_CSS = """
     
     /* Top nav bar - light blue */
     .topbar {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         padding: 0.75rem 1.5rem;
         border-radius: 8px;
         margin-bottom: 1rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        color: #14532d;
-        border: 1px solid #bbf7d0;
+        color: #1a202c;
+        border: 1px solid #e2e8f0;
     }
-    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#14532d; }
+    .topbar h1 { margin:0; font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; color:#1a202c; }
     .topbar .user-badge {
         display:flex; align-items:center; gap:8px;
         background: rgba(255,255,255,0.6); padding: 4px 14px; border-radius: 20px;
@@ -87,13 +87,16 @@ CUSTOM_CSS = """
     }
     .stButton button:active { transform:scale(0.97); }
     .stButton button[kind="primary"] {
-        background: #16a34a; border: 1px solid #16a34a; color: #ffffff !important;
+        background: #2563eb; border: 1px solid #2563eb; color: #ffffff !important;
     }
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { gap:0.5rem; background:#ffffff; padding:0.25rem; border-radius:8px; border: 1px solid #e2e8f0; }
     .stTabs [data-baseweb="tab"] { border-radius:6px; font-size:0.85rem; font-weight:500; color:#4a5568 !important; }
-    .stTabs [aria-selected="true"] { background:#16a34a !important; color:#ffffff !important; font-weight:600 !important; }
+    .stTabs [aria-selected="true"] {
+        background: transparent !important; color:#1a202c !important; font-weight:600 !important;
+        border-bottom: 2px solid #16a34a !important;
+    }
     
     /* Selectbox / Input labels */
     .stSelectbox label, .stNumberInput label, .stRadio label {
@@ -101,59 +104,59 @@ CUSTOM_CSS = """
     }
     .stSelectbox div[data-baseweb="select"] span { color:#1a202c !important; }
     .stSelectbox div[data-baseweb="select"] {
-        background: #f0fdf4 !important; border: 1px solid #86efac !important; border-radius: 6px !important;
+        background: #ffffff !important; border: 1px solid #cbd5e0 !important; border-radius: 6px !important;
     }
-    .stSelectbox div[data-baseweb="select"]:hover { border-color: #22c55e !important; }
-    /* Select dropdown - aggressive override */
+    .stSelectbox div[data-baseweb="select"]:hover { border-color: #9ca3af !important; }
+    /* Select dropdown */
     div[data-baseweb="popover"], div[data-baseweb="popover"] *,
     div[data-baseweb="menu"], div[data-baseweb="menu"] *,
     div[role="listbox"], div[role="listbox"] *,
     ul[role="listbox"], ul[role="listbox"] * {
-        background-color: #f0fdf4 !important;
+        background-color: #ffffff !important;
         color: #1a202c !important;
-        border-color: #bbf7d0 !important;
+        border-color: #e2e8f0 !important;
     }
     div[data-baseweb="popover"], div[data-baseweb="menu"],
     div[role="listbox"], ul[role="listbox"],
     .stSelectbox div[role="listbox"] {
-        border: 1px solid #bbf7d0 !important;
+        border: 1px solid #e2e8f0 !important;
         border-radius: 6px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
         padding: 4px 0 !important;
     }
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover,
     li[role="option"]:hover, div[role="option"]:hover,
-    [data-baseweb="menu"] [role="option"]:hover { background: #dcfce7 !important; }
+    [data-baseweb="menu"] [role="option"]:hover { background: #f3f4f6 !important; }
     div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"],
     li[role="option"][aria-selected="true"], div[role="option"][aria-selected="true"],
     [data-baseweb="menu"] [role="option"][aria-selected="true"] {
-        background: #bbf7d0 !important; font-weight:600 !important;
+        background: #e5e7eb !important; font-weight:600 !important;
     }
 
-    /* Streamlit 1.40+ select widget - catch any overlay */
+    /* Streamlit 1.40+ select widget */
     .stSelectbox [class*="list"],
     .stSelectbox [class*="menu"],
     .stSelectbox [class*="dropdown"],
     .stSelectbox [class*="option"],
     .stSelectbox [class*="select"] > [class*="container"] {
-        background-color: #f0fdf4 !important;
+        background-color: #ffffff !important;
         color: #1a202c !important;
     }
 
     /* Native select fallback */
     .stSelectbox select, .stSelectbox select option {
-        background-color: #f0fdf4 !important;
+        background-color: #ffffff !important;
         color: #1a202c !important;
     }
     .stSelectbox select {
-        border: 1px solid #86efac !important;
+        border: 1px solid #cbd5e0 !important;
         border-radius: 6px !important;
         padding: 4px 8px !important;
     }
 
     /* Streamlit dark mode override */
     [data-theme="dark"] .stSelectbox * {
-        background-color: #f0fdf4 !important;
+        background-color: #ffffff !important;
         color: #1a202c !important;
     }
 
@@ -164,10 +167,10 @@ CUSTOM_CSS = """
     
     /* Number input */
     .stNumberInput input {
-        background: #f0fdf4 !important; border: 1px solid #86efac !important;
+        background: #ffffff !important; border: 1px solid #cbd5e0 !important;
         border-radius: 6px !important; color: #1a202c !important;
     }
-    .stNumberInput input:focus { border-color: #22c55e !important; box-shadow: 0 0 0 2px rgba(34,197,94,0.2) !important; }
+    .stNumberInput input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 2px rgba(37,99,235,0.15) !important; }
     
     /* Info / Warning / Error boxes */
     .stAlert { border-left: 4px solid; }
@@ -186,7 +189,7 @@ CUSTOM_CSS = """
 </style>
 <script>
 const o=new MutationObserver(m=>{m.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===1){n.querySelectorAll('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]').forEach(f);if(n.matches&&n.matches('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]'))f(n)}})})});
-function f(e){e.style.setProperty('background-color','#f0fdf4','important');e.style.setProperty('color','#1a202c','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#f0fdf4','important');o.style.setProperty('color','#1a202c','important')})}
+function f(e){e.style.setProperty('background-color','#ffffff','important');e.style.setProperty('color','#1a202c','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#ffffff','important');o.style.setProperty('color','#1a202c','important')})}
 o.observe(document.body,{childList:true,subtree:true});
 </script>"""
 
