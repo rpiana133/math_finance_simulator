@@ -366,7 +366,7 @@ CHART_PERIODS = {
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
 }
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def fetch_stock_market_data(ticker):
     try:
         stock = yf.Ticker(ticker)
@@ -375,14 +375,14 @@ def fetch_stock_market_data(ticker):
             hist = stock.history(period="1mo")
         if hist.empty:
             return None, None, None
-        live_price = float(hist['Close'].iloc[-1])
+        close_price = float(hist['Close'].iloc[-1])
         try:
             info = stock.info
             company_name = info.get('shortName') or info.get('longName') or ticker
         except Exception:
             company_name = ticker
         recent = hist.tail(10) if len(hist) >= 10 else hist
-        return live_price, recent, company_name
+        return close_price, recent, company_name
     except Exception:
         return None, None, None
 
