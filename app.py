@@ -629,9 +629,13 @@ with main_tab2:
                                 sell_shares = shares_input
                                 sell_value = sell_shares * live_price
                                 fraction_sold = sell_shares / owned_shares
-                                student_profile["cash"] = round(student_cash + sell_value, 2)
+                                cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                profit = sell_value - cost_basis
+                                tax = max(0, round(profit * 0.15, 2))
+                                net_proceeds = sell_value - tax
+                                student_profile["cash"] = round(student_cash + net_proceeds, 2)
                                 student_holdings[trade_ticker]['shares'] -= sell_shares
-                                student_holdings[trade_ticker]['total_cost'] -= fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                student_holdings[trade_ticker]['total_cost'] -= cost_basis
                                 if student_holdings[trade_ticker]['shares'] < 0.0001:
                                     del student_holdings[trade_ticker]
                                 student_profile.setdefault("history", []).append({
@@ -641,7 +645,10 @@ with main_tab2:
                                 })
                                 global_database[student_email] = student_profile
                                 save_gcs_database(global_database)
-                                st.success(f"Sold {sell_shares:.4f} shares of {trade_ticker}!")
+                                msg = f"Sold {sell_shares:.4f} shares of {trade_ticker}!"
+                                if tax > 0:
+                                    msg += f" (15% profit tax: -${tax:.2f})"
+                                st.success(msg)
                                 st.rerun()
                         else:
                             current_position_value = owned_shares * live_price
@@ -650,9 +657,13 @@ with main_tab2:
                             else:
                                 fraction_sold = usd_allocation / current_position_value
                                 sell_shares = fraction_sold * owned_shares
-                                student_profile["cash"] = round(student_cash + usd_allocation, 2)
+                                cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                profit = usd_allocation - cost_basis
+                                tax = max(0, round(profit * 0.15, 2))
+                                net_proceeds = usd_allocation - tax
+                                student_profile["cash"] = round(student_cash + net_proceeds, 2)
                                 student_holdings[trade_ticker]['shares'] -= sell_shares
-                                student_holdings[trade_ticker]['total_cost'] -= fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                student_holdings[trade_ticker]['total_cost'] -= cost_basis
                                 if student_holdings[trade_ticker]['shares'] < 0.0001:
                                     del student_holdings[trade_ticker]
                                 student_profile.setdefault("history", []).append({
@@ -662,7 +673,10 @@ with main_tab2:
                                 })
                                 global_database[student_email] = student_profile
                                 save_gcs_database(global_database)
-                                st.success(f"Sold ${usd_allocation:,.2f} of {trade_ticker}!")
+                                msg = f"Sold ${usd_allocation:,.2f} of {trade_ticker}!"
+                                if tax > 0:
+                                    msg += f" (15% profit tax: -${tax:.2f})"
+                                st.success(msg)
                                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
