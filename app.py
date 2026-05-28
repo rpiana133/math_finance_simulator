@@ -105,15 +105,21 @@ CUSTOM_CSS = """
         background: #ffffff !important; border: 1px solid #9ca3af !important; border-radius: 6px !important;
     }
     .stSelectbox div[data-baseweb="select"]:hover { border-color: #2563eb !important; }
-    div[data-baseweb="menu"] {
-        background: #fef9e7 !important; border: 1px solid #d1d5db !important;
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        background: #fff8e7 !important; border: 1px solid #d1d5db !important;
         border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
     }
-    div[data-baseweb="menu"] li {
-        color: #000000 !important; font-size: 0.9rem !important; padding: 8px 12px !important;
+    div[data-baseweb="popover"] ul, div[data-baseweb="menu"] ul {
+        background: #fff8e7 !important; padding: 4px 0 !important;
     }
-    div[data-baseweb="menu"] li:hover { background: #fdecc8 !important; }
-    div[data-baseweb="menu"] li[aria-selected="true"] { background: #fce4b4 !important; font-weight:600 !important; }
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] li {
+        color: #000000 !important; font-size: 0.9rem !important; padding: 8px 12px !important;
+        background: #fff8e7 !important;
+    }
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: #fde8c8 !important; }
+    div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"] {
+        background: #fcd9a0 !important; font-weight:600 !important;
+    }
     
     /* Info / Warning / Error boxes */
     .stAlert { border-left: 4px solid; }
