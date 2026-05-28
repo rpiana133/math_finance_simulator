@@ -3,6 +3,7 @@
 ## 2026-05-28
 
 ### Added
+- Weekly $100 deposit for students (accumulates for missed weeks)
 - GCS bucket object versioning enabled to preserve student portfolio data through bug fixes
 - Initial Streamlit app with Google OAuth login wall
 - Google Workspace OAuth integration (confidential client, PKCE disabled)
