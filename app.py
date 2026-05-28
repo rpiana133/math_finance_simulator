@@ -988,15 +988,25 @@ def plot_candlestick(ticker, hist, period_label="3 Months"):
     ), row=2, col=1)
     fig.update_layout(
         title=f"{ticker}{period_text}",
-        xaxis_title=None, yaxis_title="Price ($)",
         height=500, margin=dict(l=0, r=0, t=35, b=0),
         template="none",
         hovermode="x unified",
         font=dict(family="Inter, -apple-system, sans-serif", size=11),
         paper_bgcolor='white', plot_bgcolor='white'
     )
-    fig.update_xaxes(rangeslider_visible=False, gridcolor='#f0f2f5', zerolinecolor='#e5e7eb')
-    fig.update_yaxes(gridcolor='#f0f2f5', zerolinecolor='#e5e7eb')
+    fig.update_xaxes(
+        title_text="Date", rangeslider_visible=False,
+        gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
+        tickformat="%b %d, %Y"
+    )
+    fig.update_yaxes(
+        title_text="Price ($)", gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
+        tickprefix="$"
+    )
+    fig.update_yaxes(
+        title_text="Volume", gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
+        row=2, col=1, tickformat=".2s"
+    )
     return fig
 
 # ==========================================
