@@ -129,6 +129,38 @@ CUSTOM_CSS = """
     [data-baseweb="menu"] [role="option"][aria-selected="true"] {
         background: #bbf7d0 !important; font-weight:600 !important;
     }
+
+    /* Streamlit 1.40+ select widget - catch any overlay */
+    .stSelectbox [class*="list"],
+    .stSelectbox [class*="menu"],
+    .stSelectbox [class*="dropdown"],
+    .stSelectbox [class*="option"],
+    .stSelectbox [class*="select"] > [class*="container"] {
+        background-color: #f0fdf4 !important;
+        color: #1a202c !important;
+    }
+
+    /* Native select fallback */
+    .stSelectbox select, .stSelectbox select option {
+        background-color: #f0fdf4 !important;
+        color: #1a202c !important;
+    }
+    .stSelectbox select {
+        border: 1px solid #86efac !important;
+        border-radius: 6px !important;
+        padding: 4px 8px !important;
+    }
+
+    /* Streamlit dark mode override */
+    [data-theme="dark"] .stSelectbox * {
+        background-color: #f0fdf4 !important;
+        color: #1a202c !important;
+    }
+
+    /* Catch absolutely any child of stSelectbox */
+    .stSelectbox * {
+        -webkit-text-fill-color: initial !important;
+    }
     
     /* Number input */
     .stNumberInput input {
@@ -152,7 +184,11 @@ CUSTOM_CSS = """
     /* Hide default streamlit header */
     #MainMenu {visibility:hidden;} footer {visibility:hidden;}
 </style>
-"""
+<script>
+const o=new MutationObserver(m=>{m.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===1){n.querySelectorAll('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]').forEach(f);if(n.matches&&n.matches('[role="listbox"],[data-baseweb="menu"],[data-baseweb="popover"]'))f(n)}})})});
+function f(e){e.style.setProperty('background-color','#f0fdf4','important');e.style.setProperty('color','#1a202c','important');e.querySelectorAll('li,[role="option"]').forEach(o=>{o.style.setProperty('background-color','#f0fdf4','important');o.style.setProperty('color','#1a202c','important')})}
+o.observe(document.body,{childList:true,subtree:true});
+</script>"""
 
 # ==========================================
 # 1. GOOGLE OAUTH2 AUTHENTICATION GATING
