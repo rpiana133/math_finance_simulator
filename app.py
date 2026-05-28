@@ -266,18 +266,23 @@ def load_student_profile(email):
         storage_client = get_gcs_client()
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
-        if not blob.exists():
+        exists = blob.exists()
+        if not exists:
+            # Also check without prefix (older format)
+            fallback = bucket.blob(f"{email}.json")
+            if fallback.exists():
+                data = fallback.download_as_text()
+                profile = json.loads(data)
+                save_student_profile(email, profile)
+                return profile
             return None
         data = blob.download_as_text()
         return json.loads(data)
-    except Exception:
+    except Exception as e:
+        st.error(f"GCS load error: {e}")
         if 'profiles_cache' not in st.session_state:
             st.session_state.profiles_cache = {}
-        cached = st.session_state.profiles_cache.get(email)
-        if cached is not None:
-            return cached
-        st.warning("Could not load profile from cloud storage. Try again later.")
-        return None
+        return st.session_state.profiles_cache.get(email)
 
 def save_student_profile(email, profile):
     try:
@@ -285,7 +290,8 @@ def save_student_profile(email, profile):
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"{BLOB_PREFIX}{email}.json")
         blob.upload_from_string(json.dumps(profile, indent=4), content_type='application/json')
-    except Exception:
+    except Exception as e:
+        st.error(f"GCS save error: {e}")
         if 'profiles_cache' not in st.session_state:
             st.session_state.profiles_cache = {}
         st.session_state.profiles_cache[email] = profile
