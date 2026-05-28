@@ -105,19 +105,26 @@ CUSTOM_CSS = """
         background: #f0fdf4 !important; border: 1px solid #86efac !important; border-radius: 6px !important;
     }
     .stSelectbox div[data-baseweb="select"]:hover { border-color: #22c55e !important; }
-    div[data-baseweb="popover"], div[data-baseweb="menu"] {
-        background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important;
-        border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    /* Select dropdown - aggressive override */
+    div[data-baseweb="popover"], div[data-baseweb="popover"] *,
+    div[data-baseweb="menu"], div[data-baseweb="menu"] *,
+    div[role="listbox"], div[role="listbox"] *,
+    ul[role="listbox"], ul[role="listbox"] * {
+        background-color: #f0fdf4 !important;
+        color: #1a202c !important;
+        border-color: #bbf7d0 !important;
     }
-    div[data-baseweb="popover"] ul, div[data-baseweb="menu"] ul {
-        background: #f0fdf4 !important; padding: 4px 0 !important;
+    div[data-baseweb="popover"], div[data-baseweb="menu"],
+    div[role="listbox"], ul[role="listbox"] {
+        border: 1px solid #bbf7d0 !important;
+        border-radius: 6px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+        padding: 4px 0 !important;
     }
-    div[data-baseweb="popover"] li, div[data-baseweb="menu"] li {
-        color: #1a202c !important; font-size: 0.9rem !important; padding: 8px 12px !important;
-        background: #f0fdf4 !important;
-    }
-    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover { background: #dcfce7 !important; }
-    div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"] {
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] li:hover,
+    li[role="option"]:hover, div[role="option"]:hover { background: #dcfce7 !important; }
+    div[data-baseweb="popover"] li[aria-selected="true"], div[data-baseweb="menu"] li[aria-selected="true"],
+    li[role="option"][aria-selected="true"], div[role="option"][aria-selected="true"] {
         background: #bbf7d0 !important; font-weight:600 !important;
     }
     
