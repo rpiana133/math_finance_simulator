@@ -361,6 +361,11 @@ def parse_ticker_option(display_str):
 
 DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
 
+CHART_PERIODS = {
+    "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
+    "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
+}
+
 @st.cache_data(ttl=60)
 def fetch_stock_market_data(ticker):
     try:
@@ -436,7 +441,8 @@ def check_and_trigger_alerts():
 
 triggered_alerts = check_and_trigger_alerts()
 
-def plot_candlestick(ticker, hist):
+def plot_candlestick(ticker, hist, period_label="3 Months"):
+    period_text = f" ({period_label})" if period_label else ""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         vertical_spacing=0.05,
@@ -452,7 +458,7 @@ def plot_candlestick(ticker, hist):
         marker_color='rgba(107,114,128,0.4)', showlegend=False
     ), row=2, col=1)
     fig.update_layout(
-        title=f"{ticker} — 3 Month",
+        title=f"{ticker}{period_text}",
         xaxis_title=None, yaxis_title="Price ($)",
         height=500, margin=dict(l=0, r=0, t=35, b=0),
         template="none",
@@ -637,11 +643,11 @@ with main_tab2:
     
     with tcol2:
         st.markdown('<div class="card" style="padding:0.5rem 1.25rem 1.25rem 1.25rem;">', unsafe_allow_html=True)
-        st.caption("Chart")
+        trade_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="trade_chart_period", label_visibility="collapsed")
         chart_trade_ticker = parse_ticker_option(selected_display)
-        hist = fetch_full_history(chart_trade_ticker)
+        hist = fetch_full_history(chart_trade_ticker, period=trade_chart_period)
         if hist is not None and len(hist) > 5:
-            fig = plot_candlestick(chart_trade_ticker, hist)
+            fig = plot_candlestick(chart_trade_ticker, hist, period_label=CHART_PERIODS[trade_chart_period])
             fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
             st.plotly_chart(fig, use_container_width=True, key="trade_chart")
         else:
@@ -680,9 +686,10 @@ with main_tab3:
         st.markdown('<div class="card"><h3>Price History</h3>', unsafe_allow_html=True)
         chart_display = st.selectbox("Asset", options=DISPLAY_OPTIONS, key="chart_ticker", label_visibility="collapsed")
         chart_ticker2 = parse_ticker_option(chart_display)
-        hist2 = fetch_full_history(chart_ticker2)
+        research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed")
+        hist2 = fetch_full_history(chart_ticker2, period=research_chart_period)
         if hist2 is not None and len(hist2) > 5:
-            fig2 = plot_candlestick(chart_ticker2, hist2)
+            fig2 = plot_candlestick(chart_ticker2, hist2, period_label=CHART_PERIODS[research_chart_period])
             fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
             st.plotly_chart(fig2, use_container_width=True, key="research_chart")
         else:
