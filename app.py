@@ -869,6 +869,14 @@ def parse_ticker_option(display_str):
 
 DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
 
+def searchable_stock_picker(key, label="Symbol", index=0):
+    search_key = f"{key}_search"
+    if search_key not in st.session_state:
+        st.session_state[search_key] = ""
+    search = st.text_input("🔍 Search stocks...", key=search_key, placeholder="Type ticker or company name", label_visibility="collapsed")
+    filtered = [o for o in DISPLAY_OPTIONS if search.lower() in o.lower()] if search else DISPLAY_OPTIONS
+    return st.selectbox(label, options=filtered if filtered else DISPLAY_OPTIONS, index=0, key=key, label_visibility="collapsed")
+
 CHART_PERIODS = {
     "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
@@ -1075,7 +1083,7 @@ with main_tab2:
     
     with tcol1:
         st.markdown('<div class="card"><h3>Trade Ticket</h3>', unsafe_allow_html=True)
-        selected_display = st.selectbox("Symbol", options=DISPLAY_OPTIONS, index=0, label_visibility="collapsed")
+        selected_display = searchable_stock_picker("trade")
         trade_ticker = parse_ticker_option(selected_display)
         
         live_price, _, company = fetch_stock_market_data(trade_ticker)
@@ -1192,7 +1200,7 @@ with main_tab3:
     
     with rcol1:
         st.markdown('<div class="card"><h3>Volatility Calculator</h3>', unsafe_allow_html=True)
-        vol_display = st.selectbox("Asset", options=DISPLAY_OPTIONS, key="vol_ticker", label_visibility="collapsed")
+        vol_display = searchable_stock_picker("vol")
         vol_ticker = parse_ticker_option(vol_display)
         _, hist_vol, _ = fetch_stock_market_data(vol_ticker)
         if hist_vol is not None and len(hist_vol) >= 2:
@@ -1217,7 +1225,7 @@ with main_tab3:
     
     with rcol2:
         st.markdown('<div class="card"><h3>Price History</h3>', unsafe_allow_html=True)
-        chart_display = st.selectbox("Asset", options=DISPLAY_OPTIONS, key="chart_ticker", label_visibility="collapsed")
+        chart_display = searchable_stock_picker("chart")
         chart_ticker2 = parse_ticker_option(chart_display)
         research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed")
         hist2 = fetch_full_history(chart_ticker2, period=research_chart_period)
@@ -1234,7 +1242,7 @@ with main_tab4:
     st.caption("Notify when a stock crosses a target price.")
     arow1, arow2, arow3, arow4 = st.columns([2, 1, 1, 1])
     with arow1:
-        alert_selected = st.selectbox("Symbol", options=DISPLAY_OPTIONS, key="alert_sel", label_visibility="collapsed")
+        alert_selected = searchable_stock_picker("alert")
         alert_ticker = parse_ticker_option(alert_selected)
     with arow2:
         alert_direction = st.selectbox("Above/Below", ["above", "below"], key="alert_dir", label_visibility="collapsed")
