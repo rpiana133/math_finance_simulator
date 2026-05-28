@@ -1120,7 +1120,7 @@ with main_tab2:
             if live_price:
                 st.caption(f"≈ {usd_allocation / live_price:.4f} shares")
         
-        if st.button("Submit Order", type="primary", use_container_width=True):
+        if st.button("📋 Review Order", type="primary", use_container_width=True):
             live_price, _, company = fetch_stock_market_data(trade_ticker)
             if live_price is None:
                 st.error(f"Ticker '{trade_ticker}' not found.")
@@ -1131,65 +1131,83 @@ with main_tab2:
                 else:
                     shares_to_trade = usd_allocation / live_price
                     actual_cost = usd_allocation
-                
-                if action == "Buy":
-                    if actual_cost > student_cash:
-                        st.error(f"Insufficient cash. You have ${student_cash:.2f}, need ${actual_cost:.2f}.")
-                    else:
-                        student_profile["cash"] = round(student_cash - actual_cost, 2)
-                        if trade_ticker in student_holdings:
-                            student_holdings[trade_ticker]['shares'] += shares_to_trade
-                            student_holdings[trade_ticker]['total_cost'] += actual_cost
-                        else:
-                            student_holdings[trade_ticker] = {'shares': shares_to_trade, 'total_cost': actual_cost}
-                        student_profile.setdefault("history", []).append({
-                            "type": "Buy", "ticker": trade_ticker, "shares": round(shares_to_trade, 4),
-                            "price": round(live_price, 2), "total": round(actual_cost, 2),
-                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                        })
-                        save_student_profile(student_email, student_profile)
-                        st.success(f"Bought {shares_to_trade:.4f} shares of {trade_ticker}!")
-                        st.rerun()
+
+                error = None
+                if action == "Buy" and actual_cost > student_cash:
+                    error = f"Insufficient cash (${student_cash:.2f} available, ${actual_cost:.2f} needed)"
                 elif action == "Sell":
-                    def execute_sell(shares, proceeds):
-                        fraction_sold = shares / owned_shares
-                        cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
-                        profit = proceeds - cost_basis
-                        tax = max(0, round(profit * 0.15, 2))
-                        net_proceeds = proceeds - tax
-                        student_profile["cash"] = round(student_cash + net_proceeds, 2)
-                        student_holdings[trade_ticker]['shares'] -= shares
-                        student_holdings[trade_ticker]['total_cost'] -= cost_basis
-                        if student_holdings[trade_ticker]['shares'] < 0.0001:
-                            del student_holdings[trade_ticker]
+                    if trade_ticker not in student_holdings:
+                        error = "Asset not owned."
+                    else:
+                        owned_shares = student_holdings[trade_ticker]['shares']
+                        if order_mode == "By Shares" and shares_input > owned_shares + 0.0001:
+                            error = f"Only {owned_shares:.4f} shares owned."
+                        elif order_mode == "By Amount ($)":
+                            current_position_value = owned_shares * live_price
+                            if usd_allocation > current_position_value + 0.01:
+                                error = "Amount exceeds position value."
+
+                if error:
+                    st.error(error)
+                else:
+                    st.session_state.pending_trade = {
+                        "action": action, "ticker": trade_ticker, "shares": shares_to_trade,
+                        "cost": actual_cost, "price": live_price
+                    }
+                    st.rerun()
+
+        pending = st.session_state.get("pending_trade")
+        if pending and pending["ticker"] == trade_ticker:
+            t = pending
+            st.info(f"**Confirm {t['action']}:** {t['shares']:.4f} shares of **{t['ticker']}** at ${t['price']:.2f} = **${t['cost']:.2f}**")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(f"✅ Confirm {t['action']}", type="primary", use_container_width=True):
+                    live_price, _, _ = fetch_stock_market_data(t['ticker'])
+                    if t['action'] == "Buy":
+                        student_profile["cash"] = round(student_cash - t['cost'], 2)
+                        if t['ticker'] in student_holdings:
+                            student_holdings[t['ticker']]['shares'] += t['shares']
+                            student_holdings[t['ticker']]['total_cost'] += t['cost']
+                        else:
+                            student_holdings[t['ticker']] = {'shares': t['shares'], 'total_cost': t['cost']}
                         student_profile.setdefault("history", []).append({
-                            "type": "Sell", "ticker": trade_ticker, "shares": round(shares, 4),
-                            "price": round(live_price, 2), "total": round(proceeds, 2),
+                            "type": "Buy", "ticker": t['ticker'], "shares": round(t['shares'], 4),
+                            "price": round(t['price'], 2), "total": round(t['cost'], 2),
                             "time": datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
                         save_student_profile(student_email, student_profile)
-                        msg = f"Sold shares of {trade_ticker}!"
+                        del st.session_state.pending_trade
+                        st.success(f"Bought {t['shares']:.4f} shares of {t['ticker']}!")
+                        st.rerun()
+                    elif t['action'] == "Sell":
+                        owned_shares = student_holdings[t['ticker']]['shares']
+                        fraction_sold = t['shares'] / owned_shares
+                        cost_basis = fraction_sold * student_holdings[t['ticker']]['total_cost']
+                        profit = t['cost'] - cost_basis
+                        tax = max(0, round(profit * 0.15, 2))
+                        net_proceeds = t['cost'] - tax
+                        student_profile["cash"] = round(student_cash + net_proceeds, 2)
+                        student_holdings[t['ticker']]['shares'] -= t['shares']
+                        student_holdings[t['ticker']]['total_cost'] -= cost_basis
+                        if student_holdings[t['ticker']]['shares'] < 0.0001:
+                            del student_holdings[t['ticker']]
+                        student_profile.setdefault("history", []).append({
+                            "type": "Sell", "ticker": t['ticker'], "shares": round(t['shares'], 4),
+                            "price": round(t['price'], 2), "total": round(t['cost'], 2),
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
+                        save_student_profile(student_email, student_profile)
+                        del st.session_state.pending_trade
+                        msg = f"Sold shares of {t['ticker']}!"
                         if tax > 0:
                             msg += f" (15% profit tax: -${tax:.2f})"
                         st.success(msg)
                         st.rerun()
-
-                    if trade_ticker not in student_holdings:
-                        st.error("Asset not owned.")
-                    else:
-                        owned_shares = student_holdings[trade_ticker]['shares']
-                        if order_mode == "By Shares":
-                            if shares_input > owned_shares + 0.0001:
-                                st.error("Not enough shares owned.")
-                            else:
-                                execute_sell(shares_input, shares_input * live_price)
-                        else:
-                            current_position_value = owned_shares * live_price
-                            if usd_allocation > (current_position_value + 0.01):
-                                st.error("Amount exceeds position value.")
-                            else:
-                                fraction_sold = usd_allocation / current_position_value
-                                execute_sell(fraction_sold * owned_shares, usd_allocation)
+            with c2:
+                if st.button("❌ Cancel", use_container_width=True):
+                    del st.session_state.pending_trade
+                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tcol2:
