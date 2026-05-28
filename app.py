@@ -618,6 +618,30 @@ with main_tab2:
                         st.success(f"Bought {shares_to_trade:.4f} shares of {trade_ticker}!")
                         st.rerun()
                 elif action == "Sell":
+                    def execute_sell(shares, proceeds):
+                        fraction_sold = shares / owned_shares
+                        cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
+                        profit = proceeds - cost_basis
+                        tax = max(0, round(profit * 0.15, 2))
+                        net_proceeds = proceeds - tax
+                        student_profile["cash"] = round(student_cash + net_proceeds, 2)
+                        student_holdings[trade_ticker]['shares'] -= shares
+                        student_holdings[trade_ticker]['total_cost'] -= cost_basis
+                        if student_holdings[trade_ticker]['shares'] < 0.0001:
+                            del student_holdings[trade_ticker]
+                        student_profile.setdefault("history", []).append({
+                            "type": "Sell", "ticker": trade_ticker, "shares": round(shares, 4),
+                            "price": round(live_price, 2), "total": round(proceeds, 2),
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
+                        global_database[student_email] = student_profile
+                        save_gcs_database(global_database)
+                        msg = f"Sold shares of {trade_ticker}!"
+                        if tax > 0:
+                            msg += f" (15% profit tax: -${tax:.2f})"
+                        st.success(msg)
+                        st.rerun()
+
                     if trade_ticker not in student_holdings:
                         st.error("Asset not owned.")
                     else:
@@ -626,58 +650,14 @@ with main_tab2:
                             if shares_input > owned_shares + 0.0001:
                                 st.error("Not enough shares owned.")
                             else:
-                                sell_shares = shares_input
-                                sell_value = sell_shares * live_price
-                                fraction_sold = sell_shares / owned_shares
-                                cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
-                                profit = sell_value - cost_basis
-                                tax = max(0, round(profit * 0.15, 2))
-                                net_proceeds = sell_value - tax
-                                student_profile["cash"] = round(student_cash + net_proceeds, 2)
-                                student_holdings[trade_ticker]['shares'] -= sell_shares
-                                student_holdings[trade_ticker]['total_cost'] -= cost_basis
-                                if student_holdings[trade_ticker]['shares'] < 0.0001:
-                                    del student_holdings[trade_ticker]
-                                student_profile.setdefault("history", []).append({
-                                    "type": "Sell", "ticker": trade_ticker, "shares": round(sell_shares, 4),
-                                    "price": round(live_price, 2), "total": round(sell_value, 2),
-                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                                })
-                                global_database[student_email] = student_profile
-                                save_gcs_database(global_database)
-                                msg = f"Sold {sell_shares:.4f} shares of {trade_ticker}!"
-                                if tax > 0:
-                                    msg += f" (15% profit tax: -${tax:.2f})"
-                                st.success(msg)
-                                st.rerun()
+                                execute_sell(shares_input, shares_input * live_price)
                         else:
                             current_position_value = owned_shares * live_price
                             if usd_allocation > (current_position_value + 0.01):
                                 st.error("Amount exceeds position value.")
                             else:
                                 fraction_sold = usd_allocation / current_position_value
-                                sell_shares = fraction_sold * owned_shares
-                                cost_basis = fraction_sold * student_holdings[trade_ticker]['total_cost']
-                                profit = usd_allocation - cost_basis
-                                tax = max(0, round(profit * 0.15, 2))
-                                net_proceeds = usd_allocation - tax
-                                student_profile["cash"] = round(student_cash + net_proceeds, 2)
-                                student_holdings[trade_ticker]['shares'] -= sell_shares
-                                student_holdings[trade_ticker]['total_cost'] -= cost_basis
-                                if student_holdings[trade_ticker]['shares'] < 0.0001:
-                                    del student_holdings[trade_ticker]
-                                student_profile.setdefault("history", []).append({
-                                    "type": "Sell", "ticker": trade_ticker, "shares": round(sell_shares, 4),
-                                    "price": round(live_price, 2), "total": round(usd_allocation, 2),
-                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                                })
-                                global_database[student_email] = student_profile
-                                save_gcs_database(global_database)
-                                msg = f"Sold ${usd_allocation:,.2f} of {trade_ticker}!"
-                                if tax > 0:
-                                    msg += f" (15% profit tax: -${tax:.2f})"
-                                st.success(msg)
-                                st.rerun()
+                                execute_sell(fraction_sold * owned_shares, usd_allocation)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tcol2:
