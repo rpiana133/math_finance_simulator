@@ -11,6 +11,8 @@ from google.cloud import storage
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from datetime import datetime
+
 # Page Configuration
 st.set_page_config(page_title="Classroom Stock Simulator", page_icon="📈", layout="wide")
 
@@ -294,7 +296,8 @@ if student_email not in global_database:
         "name": st.session_state.user_info.get('name', 'Student'),
         "cash": 1000.00,
         "holdings": {},
-        "alerts": []
+        "alerts": [],
+        "history": []
     }
     save_gcs_database(global_database)
 
@@ -302,6 +305,7 @@ student_profile = global_database[student_email]
 student_cash = student_profile["cash"]
 student_holdings = student_profile["holdings"]
 student_alerts = student_profile.get("alerts", [])
+student_history = student_profile.get("history", [])
 
 # ==========================================
 # 3. STOCK DATA & REAL-TIME MATHEMATICS ENGINE
@@ -512,6 +516,12 @@ with main_tab1:
     else:
         st.info("No open positions. Use the Trade tab to allocate your $1,000 starting capital.")
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    if student_history:
+        st.markdown('<div class="card"><h3>Trade History</h3>', unsafe_allow_html=True)
+        hist_df = pd.DataFrame(reversed(student_history))
+        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab2:
     tcol1, tcol2 = st.columns([1, 1.4])
@@ -533,50 +543,96 @@ with main_tab2:
             st.warning(f"Price unavailable for {trade_ticker}")
         
         action = st.radio("Action", ["Buy", "Sell"], horizontal=True)
-        usd_allocation = st.number_input("Amount ($)", min_value=1.00, value=100.00, step=10.00)
+        order_mode = st.radio("Order Type", ["By Shares", "By Amount ($)"], horizontal=True)
         
-        if live_price is not None:
-            st.caption(f"≈ {usd_allocation / live_price:.4f} shares")
+        if order_mode == "By Shares":
+            shares_input = st.number_input("Shares", min_value=0.001, value=1.0, step=0.1, format="%.4f")
+            usd_allocation = shares_input * live_price if live_price else 0
+            if live_price:
+                st.caption(f"≈ ${usd_allocation:,.2f}")
+        else:
+            usd_allocation = st.number_input("Amount ($)", min_value=1.00, value=100.00, step=10.00)
+            if live_price:
+                st.caption(f"≈ {usd_allocation / live_price:.4f} shares")
         
         if st.button("Submit Order", type="primary", use_container_width=True):
             live_price, _, company = fetch_stock_market_data(trade_ticker)
             if live_price is None:
                 st.error(f"Ticker '{trade_ticker}' not found.")
             else:
-                shares_to_trade = usd_allocation / live_price
+                if order_mode == "By Shares":
+                    shares_to_trade = shares_input
+                    actual_cost = shares_to_trade * live_price
+                else:
+                    shares_to_trade = usd_allocation / live_price
+                    actual_cost = usd_allocation
+                
                 if action == "Buy":
-                    if usd_allocation > student_cash:
+                    if actual_cost > student_cash:
                         st.error("Insufficient cash.")
                     else:
-                        student_profile["cash"] = round(student_cash - usd_allocation, 2)
+                        student_profile["cash"] = round(student_cash - actual_cost, 2)
                         if trade_ticker in student_holdings:
                             student_holdings[trade_ticker]['shares'] += shares_to_trade
-                            student_holdings[trade_ticker]['total_cost'] += usd_allocation
+                            student_holdings[trade_ticker]['total_cost'] += actual_cost
                         else:
-                            student_holdings[trade_ticker] = {'shares': shares_to_trade, 'total_cost': usd_allocation}
+                            student_holdings[trade_ticker] = {'shares': shares_to_trade, 'total_cost': actual_cost}
+                        student_profile.setdefault("history", []).append({
+                            "type": "Buy", "ticker": trade_ticker, "shares": round(shares_to_trade, 4),
+                            "price": round(live_price, 2), "total": round(actual_cost, 2),
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
                         global_database[student_email] = student_profile
                         save_gcs_database(global_database)
-                        st.success(f"Bought ${usd_allocation:,.2f} of {trade_ticker}!")
+                        st.success(f"Bought {shares_to_trade:.4f} shares of {trade_ticker}!")
                         st.rerun()
                 elif action == "Sell":
                     if trade_ticker not in student_holdings:
                         st.error("Asset not owned.")
                     else:
                         owned_shares = student_holdings[trade_ticker]['shares']
-                        current_position_value = owned_shares * live_price
-                        if usd_allocation > (current_position_value + 0.01):
-                            st.error("Amount exceeds position value.")
+                        if order_mode == "By Shares":
+                            if shares_input > owned_shares + 0.0001:
+                                st.error("Not enough shares owned.")
+                            else:
+                                sell_shares = shares_input
+                                sell_value = sell_shares * live_price
+                                fraction_sold = sell_shares / owned_shares
+                                student_profile["cash"] = round(student_cash + sell_value, 2)
+                                student_holdings[trade_ticker]['shares'] -= sell_shares
+                                student_holdings[trade_ticker]['total_cost'] -= fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                if student_holdings[trade_ticker]['shares'] < 0.0001:
+                                    del student_holdings[trade_ticker]
+                                student_profile.setdefault("history", []).append({
+                                    "type": "Sell", "ticker": trade_ticker, "shares": round(sell_shares, 4),
+                                    "price": round(live_price, 2), "total": round(sell_value, 2),
+                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                })
+                                global_database[student_email] = student_profile
+                                save_gcs_database(global_database)
+                                st.success(f"Sold {sell_shares:.4f} shares of {trade_ticker}!")
+                                st.rerun()
                         else:
-                            fraction_sold = usd_allocation / current_position_value
-                            student_profile["cash"] = round(student_cash + usd_allocation, 2)
-                            student_holdings[trade_ticker]['shares'] -= (fraction_sold * owned_shares)
-                            student_holdings[trade_ticker]['total_cost'] -= (fraction_sold * student_holdings[trade_ticker]['total_cost'])
-                            if student_holdings[trade_ticker]['shares'] < 0.0001:
-                                del student_holdings[trade_ticker]
-                            global_database[student_email] = student_profile
-                            save_gcs_database(global_database)
-                            st.success(f"Sold ${usd_allocation:,.2f} of {trade_ticker}!")
-                            st.rerun()
+                            current_position_value = owned_shares * live_price
+                            if usd_allocation > (current_position_value + 0.01):
+                                st.error("Amount exceeds position value.")
+                            else:
+                                fraction_sold = usd_allocation / current_position_value
+                                sell_shares = fraction_sold * owned_shares
+                                student_profile["cash"] = round(student_cash + usd_allocation, 2)
+                                student_holdings[trade_ticker]['shares'] -= sell_shares
+                                student_holdings[trade_ticker]['total_cost'] -= fraction_sold * student_holdings[trade_ticker]['total_cost']
+                                if student_holdings[trade_ticker]['shares'] < 0.0001:
+                                    del student_holdings[trade_ticker]
+                                student_profile.setdefault("history", []).append({
+                                    "type": "Sell", "ticker": trade_ticker, "shares": round(sell_shares, 4),
+                                    "price": round(live_price, 2), "total": round(usd_allocation, 2),
+                                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                })
+                                global_database[student_email] = student_profile
+                                save_gcs_database(global_database)
+                                st.success(f"Sold ${usd_allocation:,.2f} of {trade_ticker}!")
+                                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tcol2:
