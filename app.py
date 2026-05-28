@@ -148,7 +148,13 @@ POPULAR_STOCKS = {
     "NFLX": "Netflix", "ADBE": "Adobe", "CRM": "Salesforce",
     "PEP": "PepsiCo", "KO": "Coca-Cola", "INTC": "Intel",
     "AMD": "AMD", "PYPL": "PayPal", "UBER": "Uber",
-    "SQ": "Block (Square)", "SNAP": "Snapchat", "PLTR": "Palantir"
+    "SQ": "Block (Square)", "SNAP": "Snapchat", "PLTR": "Palantir",
+    "SPY": "S&P 500 ETF", "QQQ": "Nasdaq 100 ETF", "IWM": "Russell 2000 ETF",
+    "DIA": "Dow Jones ETF", "VTI": "Total Stock Market ETF",
+    "VOO": "S&P 500 ETF (Vanguard)", "BND": "Total Bond Market ETF",
+    "GLD": "Gold ETF", "SLV": "Silver ETF", "EEM": "Emerging Markets ETF",
+    "XLF": "Financial Sector ETF", "XLK": "Tech Sector ETF",
+    "XLV": "Healthcare Sector ETF", "XLE": "Energy Sector ETF"
 }
 
 def get_company_name(ticker):
