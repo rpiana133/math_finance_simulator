@@ -162,7 +162,6 @@ POPULAR_STOCKS = {
 }
 
 ALL_TICKERS = list(POPULAR_STOCKS.keys())
-DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
 
 def get_company_name(ticker):
     return POPULAR_STOCKS.get(ticker, ticker)
@@ -175,6 +174,8 @@ def format_ticker_option(ticker):
 
 def parse_ticker_option(display_str):
     return display_str.split(" —")[0].strip()
+
+DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
 
 @st.cache_data(ttl=60)
 def fetch_stock_market_data(ticker):
