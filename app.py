@@ -1238,7 +1238,7 @@ with main_tab1:
         colors.append("#f59e0b")
     # Group holdings into US vs International
     international_tickers = {"VWO", "VEA", "EFA", "IEMG", "FXI", "EWJ", "EWG", "EWZ",
-                            "INDA", "KWEB", "EEM", "FLTW", "TAN", "ICLN", "ARKK"}
+                            "INDA", "KWEB", "EEM", "FLTW", "TAN", "ICLN"}
     us_value = 0.0
     intl_value = 0.0
     for ticker, pos in student_holdings.items():
