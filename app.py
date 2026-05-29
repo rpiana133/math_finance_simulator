@@ -1258,16 +1258,7 @@ with main_tab1:
         labels.append("International")
         values.append(intl_value)
         colors.append("#3b82f6")
-    if values:
-        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.4,
-                                      marker=dict(colors=colors, line=dict(color='#fff', width=2)),
-                                      textinfo='label+percent', textposition='outside',
-                                      textfont=dict(size=11))])
-        fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
-                          showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig, use_container_width=True, key="portfolio_pie")
-
-    # Second donut: individual stock breakdown
+    # Donut charts side by side
     stock_labels = []
     stock_values = []
     stock_colors = []
@@ -1280,14 +1271,26 @@ with main_tab1:
             stock_labels.append(ticker)
             stock_values.append(sv)
             stock_colors.append(palette[i % len(palette)])
+    if values or stock_values:
+        cols = st.columns(2)
+    if values:
+        with cols[0]:
+            fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.4,
+                                          marker=dict(colors=colors, line=dict(color='#fff', width=2)),
+                                          textinfo='label+percent', textposition='outside',
+                                          textfont=dict(size=11))])
+            fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
+                              showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig, use_container_width=True, key="portfolio_pie")
     if stock_values:
-        fig2 = go.Figure(data=[go.Pie(labels=stock_labels, values=stock_values, hole=0.4,
-                                       marker=dict(colors=stock_colors, line=dict(color='#fff', width=2)),
-                                       textinfo='label+percent', textposition='outside',
-                                       textfont=dict(size=11))])
-        fig2.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
-                           showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig2, use_container_width=True, key="stock_pie")
+        with cols[1]:
+            fig2 = go.Figure(data=[go.Pie(labels=stock_labels, values=stock_values, hole=0.4,
+                                           marker=dict(colors=stock_colors, line=dict(color='#fff', width=2)),
+                                           textinfo='label+percent', textposition='outside',
+                                           textfont=dict(size=11))])
+            fig2.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
+                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig2, use_container_width=True, key="stock_pie")
 
     st.markdown('<div class="card"><h3>Positions</h3>', unsafe_allow_html=True)
     if live_portfolio_data:
