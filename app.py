@@ -420,7 +420,8 @@ if student_profile is None:
         "alerts": [],
         "history": [],
         "unsettled_cash": 0.0,
-        "unsettled_entries": []
+        "unsettled_entries": [],
+        "dividend_tracker": {}
     }
     save_student_profile(student_email, student_profile)
 
@@ -460,6 +461,36 @@ if last_deposit_str:
         st.success(f"💰 Weekly deposit: +${deposit_amount:.2f} ({weeks_passed} week{'s' if weeks_passed > 1 else ''})")
 else:
     student_profile["last_weekly_deposit"] = now.isoformat()
+    save_student_profile(student_email, student_profile)
+
+# Dividend auto-credit
+dividend_tracker = student_profile.setdefault("dividend_tracker", {})
+total_dividends = 0.0
+for ticker, position in list(student_holdings.items()):
+    last_date_str = dividend_tracker.get(ticker)
+    divs = get_dividends(ticker)
+    if divs is None or divs.empty:
+        continue
+    latest_div_date = divs.index[-1]
+    latest_div_amount = float(divs.iloc[-1])
+    if last_date_str is None:
+        dividend_tracker[ticker] = latest_div_date.isoformat()
+        continue
+    if latest_div_date > datetime.fromisoformat(last_date_str):
+        amount = position['shares'] * latest_div_amount
+        if amount > 0:
+            student_profile["cash"] = round(student_profile["cash"] + amount, 2)
+            student_profile.setdefault("history", []).append({
+                "type": "dividend", "ticker": ticker,
+                "shares": round(position['shares'], 4),
+                "dividend_per_share": round(latest_div_amount, 4),
+                "total": round(amount, 2),
+                "time": datetime.now().isoformat()
+            })
+            total_dividends += amount
+        dividend_tracker[ticker] = latest_div_date.isoformat()
+if total_dividends > 0:
+    st.success(f"💰 ${total_dividends:.2f} in dividends collected!")
     save_student_profile(student_email, student_profile)
 
 # Refresh local variables after potential deposit
@@ -1080,6 +1111,17 @@ def fetch_full_history(ticker, period="3mo"):
         if data.empty:
             return None
         return data
+    except Exception:
+        return None
+
+@st.cache_data(ttl=86400)
+def get_dividends(ticker):
+    try:
+        t = yf.Ticker(ticker)
+        divs = t.dividends
+        if divs is None or divs.empty:
+            return None
+        return divs
     except Exception:
         return None
 
