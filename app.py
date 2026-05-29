@@ -1209,7 +1209,7 @@ st.markdown(f"""
     </div>
     <div class="item">
         <div class="label">Total Account</div>
-        <div class="value">${total_portfolio_value:,.2f}</div>
+        <div class="value {pl_class}">${total_portfolio_value:,.2f}</div>
         <div class="sub {pl_class}">{"+" if total_pl_dollars >= 0 else ""}${total_pl_dollars:,.2f} ({total_pl_pct:+.2f}%)</div>
     </div>
 </div>
@@ -1227,20 +1227,39 @@ with main_tab1:
     # Build allocation chart data
     labels = []
     values = []
+    colors = []
     if student_cash > 0:
         labels.append("Cash")
         values.append(student_cash)
+        colors.append("#6366f1")
     if student_unsettled > 0:
         labels.append("Unsettled")
         values.append(student_unsettled)
+        colors.append("#f59e0b")
+    # Group holdings into US vs International
+    international_tickers = {"VWO", "VEA", "EFA", "IEMG", "FXI", "EWJ", "EWG", "EWZ",
+                            "INDA", "KWEB", "EEM", "FLTW", "TAN", "ICLN", "ARKK"}
+    us_value = 0.0
+    intl_value = 0.0
     for ticker, pos in student_holdings.items():
         price, _, _ = fetch_stock_market_data(ticker)
         if price is not None:
-            labels.append(ticker)
-            values.append(pos['shares'] * price)
+            mv = pos['shares'] * price
+            if ticker.upper() in international_tickers:
+                intl_value += mv
+            else:
+                us_value += mv
+    if us_value > 0:
+        labels.append("US")
+        values.append(us_value)
+        colors.append("#22c55e")
+    if intl_value > 0:
+        labels.append("International")
+        values.append(intl_value)
+        colors.append("#3b82f6")
     if values:
         fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.4,
-                                      marker=dict(line=dict(color='#fff', width=2)),
+                                      marker=dict(colors=colors, line=dict(color='#fff', width=2)),
                                       textinfo='label+percent', textposition='outside',
                                       textfont=dict(size=11))])
         fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
