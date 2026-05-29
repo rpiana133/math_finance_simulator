@@ -21,6 +21,7 @@ from datetime import datetime
 # Page Configuration
 st.set_page_config(page_title="Classroom Stock Simulator", page_icon="📈", layout="wide")
 
+
 CUSTOM_CSS = """
 <style>
     html, body, [class*="css"] { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -239,6 +240,99 @@ def handle_redirect():
 
         st.query_params.clear()
         st.rerun()
+
+# Legal Pages (rendered before login wall so unauthenticated users can view them)
+LEGAL_STYLES = """
+<style>
+.legal-page { max-width: 720px; margin: 0 auto; }
+.legal-page h2 { color: #1a237e; font-size: 1.8rem; margin-top: 2rem; }
+.legal-page h3 { color: #283593; font-size: 1.3rem; margin-top: 1.5rem; }
+.legal-page p, .legal-page li { color: #374151; line-height: 1.7; }
+.legal-page hr { margin: 2rem 0; }
+</style>
+"""
+
+def _render_privacy():
+    st.markdown(LEGAL_STYLES, unsafe_allow_html=True)
+    st.markdown('<div class="legal-page">', unsafe_allow_html=True)
+    st.markdown("## 📈 Math Finance Simulator")
+    st.markdown("### Privacy Policy")
+    st.markdown("*Last updated: May 29, 2026*")
+    st.markdown("**Information We Collect**")
+    st.markdown("- **Google Account Information:** When you sign in with Google Workspace, we receive your name, email address, and profile picture. We use this only to identify you within the classroom simulator.")
+    st.markdown("- **Portfolio Data:** Your simulated trades, holdings, cash balance, and alert settings are stored in Google Cloud Storage and associated with your email address.")
+    st.markdown("**How We Use Your Information**")
+    st.markdown("- To provide and maintain the stock market simulation")
+    st.markdown("- To display your portfolio performance and classroom standings")
+    st.markdown("- To persist your data across sessions")
+    st.markdown("**Data Storage & Security**")
+    st.markdown("Your data is stored in Google Cloud Storage (GCS) with encryption at rest. Access is restricted to the application service account and your classroom teacher.")
+    st.markdown("**Data Retention**")
+    st.markdown("Your data is retained for the duration of the course. Upon request by your teacher, your account and associated data will be deleted.")
+    st.markdown("**Third-Party Services**")
+    st.markdown("- **Google Workspace:** Authentication only")
+    st.markdown("- **Google Cloud Storage:** Data persistence")
+    st.markdown("- **Yahoo Finance (yfinance):** Real-time and historical stock price data")
+    st.markdown("**Contact**")
+    st.markdown("For questions about this policy, contact your classroom instructor or the system administrator at St. John's School Guam.")
+    st.markdown("**Changes**")
+    st.markdown("We may update this policy. Changes will be communicated through the application.")
+    st.markdown('<hr>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def _render_terms():
+    st.markdown(LEGAL_STYLES, unsafe_allow_html=True)
+    st.markdown('<div class="legal-page">', unsafe_allow_html=True)
+    st.markdown("## 📈 Math Finance Simulator")
+    st.markdown("### Terms of Service")
+    st.markdown("*Last updated: May 29, 2026*")
+    st.markdown("**Acceptance**")
+    st.markdown("By using Math Finance Simulator, you agree to these terms. This is an educational simulation tool for classroom use only.")
+    st.markdown("**Educational Purpose Only**")
+    st.markdown("- This application is a **simulation** using delayed market data from Yahoo Finance.")
+    st.markdown("- All trades are **fictional** — no real money is involved.")
+    st.markdown("- The simulator is for educational purposes and does not constitute financial advice.")
+    st.markdown("**User Responsibilities**")
+    st.markdown("- Use your school-provided Google Workspace account")
+    st.markdown("- Do not attempt to access other users' data")
+    st.markdown("- Do not manipulate or exploit the simulation")
+    st.markdown("- Follow your instructor's guidelines for classroom use")
+    st.markdown("**No Real Trading**")
+    st.markdown("Math Finance Simulator does not execute real stock trades, handle real money, or provide investment recommendations.")
+    st.markdown("**Data Disclaimer**")
+    st.markdown("Stock price data is provided by Yahoo Finance and may be delayed. We are not responsible for data inaccuracies or service interruptions.")
+    st.markdown("**Limitation of Liability**")
+    st.markdown('This software is provided "as is" without warranty. The developers and St. John\'s School Guam are not liable for any losses arising from its use.')
+    st.markdown("**Termination**")
+    st.markdown("Your instructor may revoke access at any time. Upon course completion, your account may be deactivated.")
+    st.markdown("**Governing Law**")
+    st.markdown("These terms are governed by the laws of Guam, United States.")
+    st.markdown('<hr>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Handle legal page routes via query params (before login wall)
+if "page" not in st.session_state:
+    try:
+        if "page" in st.query_params:
+            st.session_state.page = st.query_params["page"]
+            st.rerun()
+    except Exception:
+        pass
+
+if st.session_state.get("page") == "privacy":
+    _render_privacy()
+    if st.button("← Back to App"):
+        del st.session_state.page
+        st.query_params.clear()
+        st.rerun()
+    st.stop()
+elif st.session_state.get("page") == "terms":
+    _render_terms()
+    if st.button("← Back to App"):
+        del st.session_state.page
+        st.query_params.clear()
+        st.rerun()
+    st.stop()
 
 # Execute Login Wall
 if st.session_state.credentials is None:
@@ -530,6 +624,7 @@ POPULAR_STOCKS = {
     "AKAM": "Akamai Technologies",
     "ALB": "Albemarle Corporation",
     "ARE": "Alexandria Real Estate Equities",
+    "ARM": "Arm Holdings",
     "ALGN": "Align Technology",
     "ALLE": "Allegion",
     "LNT": "Alliant Energy",
@@ -1018,6 +1113,43 @@ POPULAR_STOCKS = {
     "ZBRA": "Zebra Technologies",
     "ZBH": "Zimmer Biomet",
     "ZTS": "Zoetis",
+    # Non-S&P 500 stocks
+    "AFRM": "Affirm Holdings",
+    "AMC": "AMC Entertainment",
+    "CELH": "Celsius Holdings",
+    "CHWY": "Chewy",
+    "DKNG": "DraftKings",
+    "DUOL": "Duolingo",
+    "GME": "GameStop",
+    "LCID": "Lucid Motors",
+    "ONON": "On Holding",
+    "PINS": "Pinterest",
+    "RBLX": "Roblox",
+    "RDDT": "Reddit",
+    "RIVN": "Rivian Automotive",
+    "RKLB": "Rocket Lab",
+    "SNAP": "Snap Inc.",
+    "SOFI": "SoFi Technologies",
+    "SPOT": "Spotify Technology",
+    "SQ": "Block, Inc.",
+    # International ADRs
+    "ADDYY": "Adidas ADR",
+    "ASML": "ASML Holding",
+    "AZN": "AstraZeneca ADR",
+    "BABA": "Alibaba Group ADR",
+    "BP": "BP ADR",
+    "DEO": "Diageo ADR",
+    "FRCOY": "Fast Retailing / Uniqlo ADR",
+    "NIO": "NIO Inc. ADR",
+    "NVS": "Novartis ADR",
+    "PDD": "Pinduoduo ADR",
+    "SE": "Sea Limited ADR",
+    "SONY": "Sony Group ADR",
+    "TM": "Toyota Motor ADR",
+    "TSM": "TSMC ADR",
+    "UA": "Under Armour (Class C)",
+    "UAA": "Under Armour (Class A)",
+    "UL": "Unilever ADR",
     # ETFs
     "SPY": "S&P 500 ETF", "QQQ": "Nasdaq 100 ETF", "IWM": "Russell 2000 ETF",
     "DIA": "Dow Jones ETF", "VTI": "Total Stock Market ETF",
@@ -1061,7 +1193,20 @@ POPULAR_STOCKS = {
     "XLP": "Consumer Staples ETF",
     "XLU": "Utilities Sector ETF",
     "XLB": "Materials Sector ETF",
-    "XLRE": "Real Estate Sector ETF"
+    "XLRE": "Real Estate Sector ETF",
+    # Additional ETFs
+    "AGG": "Core US Aggregate Bond ETF",
+    "FBTC": "Fidelity Wise Origin Bitcoin ETF",
+    "HYG": "High Yield Corporate Bond ETF",
+    "IBIT": "iShares Bitcoin Trust ETF",
+    "IEF": "7-10 Year Treasury Bond ETF",
+    "JEPI": "JPMorgan Equity Premium Income ETF",
+    "JEPQ": "JPMorgan Nasdaq Premium Income ETF",
+    "SHY": "1-3 Year Treasury Bond ETF",
+    "TLT": "20+ Year Treasury Bond ETF",
+    "VNQ": "Vanguard Real Estate ETF",
+    "VT": "Total World Stock ETF",
+    "VXUS": "Total International Stock ETF"
 }
 
 ALL_TICKERS = sorted(POPULAR_STOCKS.keys())
@@ -1079,17 +1224,12 @@ def parse_ticker_option(display_str):
     return display_str.split(" —")[0].strip()
 
 DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
+PICKER_PLACEHOLDER = "——— Select a ticker ———"
 
-def searchable_stock_picker(key, label="Symbol", index=0):
-    search_key = f"{key}_search"
-    if search_key not in st.session_state:
-        st.session_state[search_key] = ""
-    if f"{key}_cleared" not in st.session_state:
-        st.session_state[f"{key}_cleared"] = False
-    search = st.text_input("🔍 Search stocks...", key=search_key, placeholder="Type ticker or company name", label_visibility="collapsed")
-    filtered = [o for o in DISPLAY_OPTIONS if search.lower() in o.lower()] if search else DISPLAY_OPTIONS
-    return st.selectbox(label, options=filtered if filtered else DISPLAY_OPTIONS, index=0, key=key, label_visibility="collapsed",
-                        on_change=lambda: st.session_state.update({search_key: ""}))
+def stock_picker(key):
+    selected = st.selectbox("Symbol", options=[PICKER_PLACEHOLDER] + DISPLAY_OPTIONS, key=key, label_visibility="collapsed")
+    ticker = parse_ticker_option(selected)
+    return ticker if selected != PICKER_PLACEHOLDER else None
 
 CHART_PERIODS = {
     "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
@@ -1179,9 +1319,13 @@ triggered_alerts = check_and_trigger_alerts()
 
 def plot_candlestick(ticker, hist, period_label="3 Months"):
     period_text = f" ({period_label})" if period_label else ""
+
+    sma20 = hist['Close'].rolling(20).mean()
     sma50 = hist['Close'].rolling(50).mean()
-    # Color volume bars by up/down day
+    vol_sma20 = hist['Volume'].rolling(20).mean()
+
     volume_colors = ['#16a34a' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#dc2626' for i in range(len(hist))]
+
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         vertical_spacing=0.05,
@@ -1190,7 +1334,12 @@ def plot_candlestick(ticker, hist, period_label="3 Months"):
     fig.add_trace(go.Candlestick(
         x=hist.index, open=hist['Open'], high=hist['High'],
         low=hist['Low'], close=hist['Close'], name=ticker,
-        increasing_line_color='#16a34a', decreasing_line_color='#dc2626'
+        increasing_line_color='#16a34a', decreasing_line_color='#dc2626',
+        line=dict(width=1)
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=hist.index, y=sma20, name='SMA 20',
+        line=dict(color='#6366f1', width=1.2, dash='dash')
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=hist.index, y=sma50, name='SMA 50',
@@ -1198,7 +1347,11 @@ def plot_candlestick(ticker, hist, period_label="3 Months"):
     ), row=1, col=1)
     fig.add_trace(go.Bar(
         x=hist.index, y=hist['Volume'], name='Volume',
-        marker_color=volume_colors, showlegend=False
+        marker_color=volume_colors, showlegend=False, opacity=0.8
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=hist.index, y=vol_sma20, name='Vol SMA 20',
+        line=dict(color='#a855f7', width=1, dash='dot'), showlegend=False
     ), row=2, col=1)
     fig.update_layout(
         title=f"{ticker}{period_text}",
@@ -1206,20 +1359,32 @@ def plot_candlestick(ticker, hist, period_label="3 Months"):
         template="none",
         hovermode="x unified",
         font=dict(family="Inter, -apple-system, sans-serif", size=11),
-        paper_bgcolor='white', plot_bgcolor='white'
+        paper_bgcolor='white', plot_bgcolor='white',
+        legend=dict(orientation="h", y=1.12, x=0, xanchor="left", font=dict(size=10)),
     )
     fig.update_xaxes(
         title_text="Date", rangeslider_visible=False,
         gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
-        tickformat="%b %d, %Y"
+        tickformat="%b %d, %Y",
+        rangeselector=dict(
+            buttons=list([
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(count=3, label="3m", step="month", stepmode="backward"),
+                dict(count=6, label="6m", step="month", stepmode="backward"),
+                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                dict(count=1, label="1y", step="year", stepmode="backward"),
+                dict(step="all", label="Max")
+            ]),
+            bgcolor='white', activecolor='#e8eaff',
+        )
     )
     fig.update_yaxes(
         title_text="Price ($)", gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
-        tickprefix="$"
+        tickprefix="$", side='right'
     )
     fig.update_yaxes(
         title_text="Volume", gridcolor='#f0f2f5', zerolinecolor='#e5e7eb',
-        row=2, col=1, tickformat=".2s"
+        row=2, col=1, tickformat=".2s", side='right'
     )
     return fig
 
@@ -1369,19 +1534,22 @@ with main_tab2:
     
     with tcol1:
         st.markdown('<div class="card"><h3>Trade Ticket</h3>', unsafe_allow_html=True)
-        selected_display = searchable_stock_picker("trade")
-        trade_ticker = parse_ticker_option(selected_display)
+        selected_display = stock_picker("trade")
+        trade_ticker = selected_display
+        live_price = None
         
-        live_price, _, company = fetch_stock_market_data(trade_ticker)
+        if trade_ticker:
+            live_price, _, company = fetch_stock_market_data(trade_ticker)
         
-        if live_price is not None:
+        if trade_ticker and live_price is not None:
             st.markdown(f"""
             <div style="margin:-0.5rem 0 0.5rem 0; font-size:0.85rem; color:#374151;">
                 {company} · <strong>${live_price:.2f}</strong>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.warning(f"Price unavailable for {trade_ticker}")
+            if trade_ticker:
+                st.warning(f"Price unavailable for {trade_ticker}")
         
         action = st.radio("Action", ["Buy", "Sell"], horizontal=True)
         order_mode = st.radio("Order Type", ["By Shares", "By Amount ($)"], horizontal=True)
@@ -1396,7 +1564,7 @@ with main_tab2:
             if live_price:
                 st.caption(f"≈ {usd_allocation / live_price:.4f} shares")
         
-        if st.button("📋 Review Order", type="primary", use_container_width=True):
+        if trade_ticker and st.button("📋 Review Order", type="primary", use_container_width=True):
             live_price, _, company = fetch_stock_market_data(trade_ticker)
             if live_price is None:
                 st.error(f"Ticker '{trade_ticker}' not found.")
@@ -1491,15 +1659,15 @@ with main_tab2:
     
     with tcol2:
         st.markdown('<div class="card" style="padding:0.5rem 1.25rem 1.25rem 1.25rem;">', unsafe_allow_html=True)
-        trade_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="trade_chart_period", label_visibility="collapsed")
-        chart_trade_ticker = parse_ticker_option(selected_display)
-        hist = fetch_full_history(chart_trade_ticker, period=trade_chart_period)
-        if hist is not None and len(hist) > 5:
-            fig = plot_candlestick(chart_trade_ticker, hist, period_label=CHART_PERIODS[trade_chart_period])
-            fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
-            st.plotly_chart(fig, use_container_width=True, key="trade_chart")
-        else:
-            st.info("Not enough data to chart.")
+        if trade_ticker:
+            trade_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="trade_chart_period", label_visibility="collapsed", index=3)
+            hist = fetch_full_history(trade_ticker, period=trade_chart_period)
+            if hist is not None and len(hist) > 5:
+                fig = plot_candlestick(trade_ticker, hist, period_label=CHART_PERIODS[trade_chart_period])
+                fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
+                st.plotly_chart(fig, use_container_width=True, key="trade_chart")
+            else:
+                st.info("Not enough data to chart.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab3:
@@ -1507,10 +1675,10 @@ with main_tab3:
     
     with rcol1:
         st.markdown('<div class="card"><h3>Volatility Calculator</h3>', unsafe_allow_html=True)
-        vol_display = searchable_stock_picker("vol")
-        vol_ticker = parse_ticker_option(vol_display)
-        _, hist_vol, _ = fetch_stock_market_data(vol_ticker)
-        if hist_vol is not None and len(hist_vol) >= 2:
+        vol_ticker = stock_picker("vol")
+        if vol_ticker:
+            _, hist_vol, _ = fetch_stock_market_data(vol_ticker)
+        if vol_ticker and hist_vol is not None and len(hist_vol) >= 2:
             hist_vol['Daily Change (%)'] = hist_vol['Close'].pct_change() * 100
             clean = hist_vol[['Close', 'Daily Change (%)']].dropna()
             std = clean['Daily Change (%)'].std()
@@ -1532,16 +1700,17 @@ with main_tab3:
     
     with rcol2:
         st.markdown('<div class="card"><h3>Price History</h3>', unsafe_allow_html=True)
-        chart_display = searchable_stock_picker("chart")
-        chart_ticker2 = parse_ticker_option(chart_display)
-        research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed")
-        hist2 = fetch_full_history(chart_ticker2, period=research_chart_period)
-        if hist2 is not None and len(hist2) > 5:
-            fig2 = plot_candlestick(chart_ticker2, hist2, period_label=CHART_PERIODS[research_chart_period])
-            fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
-            st.plotly_chart(fig2, use_container_width=True, key="research_chart")
-        else:
-            st.info("Not enough historical data.")
+        chart_ticker2 = stock_picker("chart")
+        chart_period_container = st.empty()
+        if chart_ticker2:
+            research_chart_period = chart_period_container.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
+            hist2 = fetch_full_history(chart_ticker2, period=research_chart_period)
+            if hist2 is not None and len(hist2) > 5:
+                fig2 = plot_candlestick(chart_ticker2, hist2, period_label=CHART_PERIODS[research_chart_period])
+                fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
+                st.plotly_chart(fig2, use_container_width=True, key="research_chart")
+            else:
+                st.info("Not enough historical data.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab4:
@@ -1549,8 +1718,7 @@ with main_tab4:
     st.caption("Notify when a stock crosses a target price.")
     arow1, arow2, arow3, arow4 = st.columns([2, 1, 1, 1])
     with arow1:
-        alert_selected = searchable_stock_picker("alert")
-        alert_ticker = parse_ticker_option(alert_selected)
+        alert_ticker = stock_picker("alert")
     with arow2:
         alert_direction = st.selectbox("Above/Below", ["above", "below"], key="alert_dir", label_visibility="collapsed")
     with arow3:
