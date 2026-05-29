@@ -1084,9 +1084,12 @@ def searchable_stock_picker(key, label="Symbol", index=0):
     search_key = f"{key}_search"
     if search_key not in st.session_state:
         st.session_state[search_key] = ""
+    if f"{key}_cleared" not in st.session_state:
+        st.session_state[f"{key}_cleared"] = False
     search = st.text_input("🔍 Search stocks...", key=search_key, placeholder="Type ticker or company name", label_visibility="collapsed")
     filtered = [o for o in DISPLAY_OPTIONS if search.lower() in o.lower()] if search else DISPLAY_OPTIONS
-    return st.selectbox(label, options=filtered if filtered else DISPLAY_OPTIONS, index=0, key=key, label_visibility="collapsed")
+    return st.selectbox(label, options=filtered if filtered else DISPLAY_OPTIONS, index=0, key=key, label_visibility="collapsed",
+                        on_change=lambda: st.session_state.update({search_key: ""}))
 
 CHART_PERIODS = {
     "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
