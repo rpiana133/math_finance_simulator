@@ -421,11 +421,13 @@ if student_profile is None:
         "history": [],
         "unsettled_cash": 0.0,
         "unsettled_entries": [],
-        "dividend_tracker": {}
+        "dividend_tracker": {},
+        "total_dividends_earned": 0.0
     }
     save_student_profile(student_email, student_profile)
 
 # Settle any unsettled proceeds older than 24 hours
+student_profile.setdefault("total_dividends_earned", 0.0)
 now = datetime.now()
 unsettled_entries = student_profile.get("unsettled_entries", [])
 settled_amount = 0.0
@@ -491,6 +493,8 @@ for ticker, position in list(student_holdings.items()):
         amount = position['shares'] * latest_div_amount
         if amount > 0:
             student_profile["cash"] = round(student_profile["cash"] + amount, 2)
+            student_profile["total_dividends_earned"] = round(
+                student_profile.get("total_dividends_earned", 0.0) + amount, 2)
             student_profile.setdefault("history", []).append({
                 "type": "dividend", "ticker": ticker,
                 "shares": round(position['shares'], 4),
@@ -1248,6 +1252,10 @@ st.markdown(f"""
     <div class="item">
         <div class="label">Portfolio Value</div>
         <div class="value">${total_holding_value:,.2f}</div>
+    </div>
+    <div class="item">
+        <div class="label">Dividends Earned</div>
+        <div class="value" style="color:#059669;">${student_profile.get("total_dividends_earned", 0.0):,.2f}</div>
     </div>
     <div class="item">
         <div class="label">Total Account</div>
