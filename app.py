@@ -1100,7 +1100,8 @@ for ticker, position in list(student_holdings.items()):
             "Avg Purchase Price": f"${avg_purchase_price:.2f}",
             "Live Price": f"${live_price:.2f}",
             "Total Value": f"${current_val:.2f}",
-            "Percentage Return": f"{pct_return:+.2f}%"
+            "Return": pct_return,
+            "_return_raw": pct_return
         })
 
 total_portfolio_value = student_cash + student_unsettled + total_holding_value
@@ -1209,7 +1210,7 @@ st.markdown(f"""
     </div>
     <div class="item">
         <div class="label">Total Account</div>
-        <div class="value {pl_class}">${total_portfolio_value:,.2f}</div>
+        <div class="value">${total_portfolio_value:,.2f}</div>
         <div class="sub {pl_class}">{"+" if total_pl_dollars >= 0 else ""}${total_pl_dollars:,.2f} ({total_pl_pct:+.2f}%)</div>
     </div>
 </div>
@@ -1266,10 +1267,37 @@ with main_tab1:
                           showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True, key="portfolio_pie")
 
+    # Second donut: individual stock breakdown
+    stock_labels = []
+    stock_values = []
+    stock_colors = []
+    palette = ["#6366f1", "#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6",
+               "#ec4899", "#14b8a6", "#f97316", "#06b6d4"]
+    for i, ticker in enumerate(student_holdings):
+        price, _, _ = fetch_stock_market_data(ticker)
+        if price is not None:
+            sv = student_holdings[ticker]['shares'] * price
+            stock_labels.append(ticker)
+            stock_values.append(sv)
+            stock_colors.append(palette[i % len(palette)])
+    if stock_values:
+        fig2 = go.Figure(data=[go.Pie(labels=stock_labels, values=stock_values, hole=0.4,
+                                       marker=dict(colors=stock_colors, line=dict(color='#fff', width=2)),
+                                       textinfo='label+percent', textposition='outside',
+                                       textfont=dict(size=11))])
+        fig2.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0),
+                           showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig2, use_container_width=True, key="stock_pie")
+
     st.markdown('<div class="card"><h3>Positions</h3>', unsafe_allow_html=True)
     if live_portfolio_data:
         df = pd.DataFrame(live_portfolio_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        df["Return"] = df["_return_raw"].map("{:+.2f}%".format)
+        def color_col(col):
+            return ["color: #059669" if r >= 0 else "color: #dc2626"
+                    for r in df["_return_raw"]]
+        styled = df.style.apply(color_col, subset=["Return"])
+        st.dataframe(styled.drop(columns=["_return_raw"]), use_container_width=True, hide_index=True)
     else:
         st.info("No open positions. Use the Trade tab to allocate your $1,000 starting capital.")
     st.markdown('</div>', unsafe_allow_html=True)
