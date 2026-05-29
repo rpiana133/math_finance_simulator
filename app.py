@@ -1100,8 +1100,7 @@ for ticker, position in list(student_holdings.items()):
             "Avg Purchase Price": f"${avg_purchase_price:.2f}",
             "Live Price": f"${live_price:.2f}",
             "Total Value": f"${current_val:.2f}",
-            "Return": pct_return,
-            "_return_raw": pct_return
+            "Return": pct_return
         })
 
 total_portfolio_value = student_cash + student_unsettled + total_holding_value
@@ -1295,12 +1294,13 @@ with main_tab1:
     st.markdown('<div class="card"><h3>Positions</h3>', unsafe_allow_html=True)
     if live_portfolio_data:
         df = pd.DataFrame(live_portfolio_data)
-        df["Return"] = df["_return_raw"].map("{:+.2f}%".format)
+        raw_returns = list(df["Return"])
+        df["Return"] = df["Return"].map("{:+.2f}%".format)
         def color_col(col):
             return ["color: #059669" if r >= 0 else "color: #dc2626"
-                    for r in df["_return_raw"]]
+                    for r in raw_returns]
         styled = df.style.apply(color_col, subset=["Return"])
-        st.dataframe(styled.drop(columns=["_return_raw"]), use_container_width=True, hide_index=True)
+        st.dataframe(styled, use_container_width=True, hide_index=True)
     else:
         st.info("No open positions. Use the Trade tab to allocate your $1,000 starting capital.")
     st.markdown('</div>', unsafe_allow_html=True)
