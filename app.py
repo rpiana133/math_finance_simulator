@@ -335,6 +335,16 @@ def _gcs_exists(path):
         headers={"Authorization": f"Bearer {token}"})
     return resp.status_code == 200
 
+def _gcs_list(prefix):
+    token = _gcs_token()
+    resp = requests.get(
+        f"https://storage.googleapis.com/storage/v1/b/{GCS_BUCKET_NAME}/o?prefix={urllib.parse.quote(prefix)}",
+        headers={"Authorization": f"Bearer {token}"})
+    if resp.status_code != 200:
+        return []
+    data = resp.json()
+    return [item["name"] for item in data.get("items", [])]
+
 def get_gcs_client():
     key_info = json.loads(st.secrets["GCS_SERVICE_ACCOUNT"])
     creds = service_account.Credentials.from_service_account_info(key_info)
@@ -372,6 +382,19 @@ def save_student_profile(email, profile):
         if 'profiles_cache' not in st.session_state:
             st.session_state.profiles_cache = {}
         st.session_state.profiles_cache[email] = profile
+
+config_teacher_email = "your.email@school.edu"  # ← SET THIS TO YOUR ACTUAL EMAIL ADDRESS
+
+def get_gcs_database():
+    """Fetch all student portfolios from GCS by listing per-student files."""
+    names = _gcs_list(BLOB_PREFIX)
+    db = {}
+    for name in names:
+        email = name[len(BLOB_PREFIX):-5]  # strip prefix + .json
+        data = _gcs_read(name)
+        if data:
+            db[email] = json.loads(data)
+    return db
 
 # Load this student's profile
 student_profile = load_student_profile(student_email)
@@ -1451,3 +1474,73 @@ with main_tab4:
                 save_student_profile(student_email, student_profile)
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+
+# ==========================================
+# 6. ENHANCED TEACHER ADMIN & CLASS LEADERBOARD
+# ==========================================
+
+if student_email == config_teacher_email:
+    st.write("---")
+    st.markdown('<div class="card"><h3>👨‍🏫 Teacher Administration</h3></div>', unsafe_allow_html=True)
+
+    admin_tab1, admin_tab2 = st.tabs(["📊 Classroom Standings", "🧪 My Pilot Testing"])
+
+    with st.spinner("Loading classroom data..."):
+        all_portfolios = get_gcs_database()
+
+    if all_portfolios:
+        with admin_tab1:
+            records = []
+            for email, profile in all_portfolios.items():
+                if email == config_teacher_email:
+                    continue
+                name = profile.get("name", "Unknown")
+                cash = profile.get("cash", 1000.0)
+                holdings = profile.get("holdings", {})
+                history = profile.get("history", [])
+
+                mv = 0.0
+                for ticker, pos in holdings.items():
+                    p, _, _ = fetch_stock_market_data(ticker)
+                    if p is not None:
+                        mv += pos["shares"] * p
+
+                nw = cash + mv
+                pl = nw - 1000.0
+                pr = (pl / 1000.0) * 100
+
+                records.append({
+                    "Rank": 0, "Student": name, "Email": email,
+                    "Net Worth": nw, "P&L ($)": pl, "Return (%)": pr,
+                    "Cash": cash, "Stock Value": mv, "Trades": len(history)
+                })
+
+            if records:
+                df = pd.DataFrame(records)
+                df = df.sort_values("Net Worth", ascending=False).reset_index(drop=True)
+                df["Rank"] = df.index + 1
+                for c in ["Net Worth", "P&L ($)", "Cash", "Stock Value"]:
+                    df[c] = df[c].map("${:,.2f}".format)
+                df["Return (%)"] = df["Return (%)"].map("{:+.2f}%".format)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                c1, c2 = st.columns(2)
+                c1.metric("Active Students", len(df))
+                top = df.iloc[0]
+                c2.metric("Class Leader", top["Student"], top["Return (%)"])
+            else:
+                st.info("No student accounts found yet.")
+
+        with admin_tab2:
+            st.markdown("#### 🧪 Your Sandbox Status")
+            st.info("Your personal trading is handled in the main tabs above, filtered out of classroom standings.")
+            teacher_profile = all_portfolios.get(config_teacher_email)
+            if teacher_profile:
+                st.json({
+                    "Name": teacher_profile.get("name"),
+                    "Cash": f"${teacher_profile.get('cash', 0.0):,.2f}",
+                    "Holdings": {t: p['shares'] for t, p in teacher_profile.get("holdings", {}).items()},
+                    "Trades Made": len(teacher_profile.get("history", []))
+                })
+    else:
+        st.error("Could not load classroom data.")
