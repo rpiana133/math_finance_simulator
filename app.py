@@ -464,6 +464,17 @@ else:
     save_student_profile(student_email, student_profile)
 
 # Dividend auto-credit
+@st.cache_data(ttl=86400)
+def get_dividends(ticker):
+    try:
+        t = yf.Ticker(ticker)
+        divs = t.dividends
+        if divs is None or divs.empty:
+            return None
+        return divs
+    except Exception:
+        return None
+
 dividend_tracker = student_profile.setdefault("dividend_tracker", {})
 total_dividends = 0.0
 for ticker, position in list(student_holdings.items()):
@@ -1111,17 +1122,6 @@ def fetch_full_history(ticker, period="3mo"):
         if data.empty:
             return None
         return data
-    except Exception:
-        return None
-
-@st.cache_data(ttl=86400)
-def get_dividends(ticker):
-    try:
-        t = yf.Ticker(ticker)
-        divs = t.dividends
-        if divs is None or divs.empty:
-            return None
-        return divs
     except Exception:
         return None
 
