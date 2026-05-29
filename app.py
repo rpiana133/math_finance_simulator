@@ -383,7 +383,7 @@ def save_student_profile(email, profile):
             st.session_state.profiles_cache = {}
         st.session_state.profiles_cache[email] = profile
 
-config_teacher_email = "your.email@school.edu"  # ← SET THIS TO YOUR ACTUAL EMAIL ADDRESS
+config_teacher_email = "rpiana@stjohnsguam.com"
 
 def get_gcs_database():
     """Fetch all student portfolios from GCS by listing per-student files."""
