@@ -1686,7 +1686,7 @@ with main_tab3:
     with rcol1:
         st.markdown('<div class="card"><h3>Volatility Calculator</h3>', unsafe_allow_html=True)
         vol_ticker = stock_picker("vol")
-        vol_period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], key="vol_period", label_visibility="collapsed")
+        vol_period = st.selectbox("Period", ["10d", "1mo", "3mo", "6mo", "1y"], key="vol_period", label_visibility="collapsed")
         if vol_ticker:
             try:
                 vol_data = _flatten_cols(yf.download(vol_ticker, period=vol_period, progress=False))
@@ -1696,7 +1696,7 @@ with main_tab3:
             vol_data['Daily Change (%)'] = vol_data['Close'].pct_change() * 100
             clean = vol_data[['Close', 'Daily Change (%)']].dropna()
             std = clean['Daily Change (%)'].std()
-            period_label = {"1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "1y": "1 year"}.get(vol_period, vol_period)
+            period_label = {"10d": "10 days", "1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "1y": "1 year"}.get(vol_period, vol_period)
             st.markdown(f"""
             <div class="metric-row">
                 <div class="metric-box">
@@ -1722,13 +1722,12 @@ with main_tab3:
     
     with rcol2:
         st.markdown('<div class="card"><h3>Price History</h3>', unsafe_allow_html=True)
-        chart_ticker2 = stock_picker("chart")
         chart_period_container = st.empty()
-        if chart_ticker2:
+        if vol_ticker:
             research_chart_period = chart_period_container.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
-            hist2 = fetch_full_history(chart_ticker2, period=research_chart_period)
+            hist2 = fetch_full_history(vol_ticker, period=research_chart_period)
             if hist2 is not None and len(hist2) > 5:
-                fig2 = plot_candlestick(chart_ticker2, hist2, period_label=CHART_PERIODS[research_chart_period])
+                fig2 = plot_candlestick(vol_ticker, hist2, period_label=CHART_PERIODS[research_chart_period])
                 fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
                 st.plotly_chart(fig2, use_container_width=True, key="research_chart")
             else:
