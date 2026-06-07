@@ -1695,17 +1695,24 @@ with main_tab3:
             st.markdown(f"""
             <div class="metric-row">
                 <div class="metric-box">
-                    <div class="m-label">Sample Std Dev</div>
-                    <div class="m-value">{std:.4f}%</div>
+                    <div class="m-label">Daily Volatility</div>
+                    <div class="m-value">{std:.2f}%</div>
                 </div>
                 <div class="metric-box">
-                    <div class="m-label">Period</div>
-                    <div class="m-value">1 Month</div>
+                    <div class="m-label">Typical Range (last 10 days)</div>
+                    <div class="m-value">±{std:.2f}%</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            risk = "very low" if std < 0.5 else "low" if std < 1.0 else "moderate" if std < 1.5 else "high" if std < 2.5 else "very high"
+            st.caption(
+                f"**What this means:** {ticker} typically moves **±{std:.1f}%** per day. "
+                f"Risk level: **{risk}**. "
+                f"Volatility measures how much a stock's price jumps around day-to-day. "
+                f"Higher volatility = less predictable price = bigger potential swings both ways."
+            )
         else:
-            st.info("Need 2+ data points.")
+            st.info("Need 2+ trading days to calculate volatility.")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with rcol2:
