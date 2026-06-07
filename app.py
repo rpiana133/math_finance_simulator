@@ -1743,6 +1743,8 @@ with main_tab3:
                     fig2.update_yaxes(side="right")
                 fig2.update_layout(height=380, margin=dict(l=0, r=0, t=35, b=50))
                 st.plotly_chart(fig2, use_container_width=True, key="research_chart")
+                if chart_style == "Candlestick":
+                    st.caption("🟢 Green bar = price closed higher &nbsp;&nbsp;&nbsp; 🔴 Red bar = price closed lower")
             else:
                 st.info("Not enough historical data.")
         st.markdown('</div>', unsafe_allow_html=True)
