@@ -545,6 +545,7 @@ student_history = student_profile.get("history", [])
 
 # Weekly $100 deposit
 now = datetime.now()
+total_deposits = student_profile.get("total_deposits", 0.0)
 last_deposit_str = student_profile.get("last_weekly_deposit")
 if last_deposit_str:
     last_deposit = datetime.fromisoformat(last_deposit_str)
@@ -552,6 +553,7 @@ if last_deposit_str:
     if weeks_passed >= 1:
         deposit_amount = weeks_passed * 100
         student_profile["cash"] = round(student_cash + deposit_amount, 2)
+        student_profile["total_deposits"] = round(total_deposits + deposit_amount, 2)
         student_profile["last_weekly_deposit"] = now.isoformat()
         save_student_profile(student_email, student_profile)
         st.success(f"💰 Weekly deposit: +${deposit_amount:.2f} ({weeks_passed} week{'s' if weeks_passed > 1 else ''})")
@@ -1293,8 +1295,9 @@ for ticker, position in list(student_holdings.items()):
         })
 
 total_portfolio_value = student_cash + student_unsettled + total_holding_value
-total_pl_dollars = total_portfolio_value - 1000.00
-total_pl_pct = ((total_portfolio_value - 1000.00) / 1000.00) * 100
+total_capital = 1000.00 + student_profile.get("total_deposits", 0.0)
+total_pl_dollars = total_portfolio_value - total_capital
+total_pl_pct = ((total_portfolio_value - total_capital) / total_capital) * 100 if total_capital else 0.0
 pl_class = "positive" if total_pl_dollars >= 0 else "negative"
 
 # ==========================================
