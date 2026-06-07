@@ -1275,6 +1275,7 @@ def fetch_full_history(ticker, period="3mo"):
         return None
 
 total_holding_value = 0.0
+total_cost_basis = 0.0
 live_portfolio_data = []
 
 for ticker, position in list(student_holdings.items()):
@@ -1282,6 +1283,7 @@ for ticker, position in list(student_holdings.items()):
     if live_price is not None:
         current_val = position['shares'] * live_price
         total_holding_value += current_val
+        total_cost_basis += position['total_cost']
         avg_purchase_price = position['total_cost'] / position['shares']
         pct_return = ((live_price - avg_purchase_price) / avg_purchase_price) * 100
         
@@ -1298,7 +1300,9 @@ total_portfolio_value = student_cash + student_unsettled + total_holding_value
 total_capital = 1000.00 + student_profile.get("total_deposits", 0.0)
 total_pl_dollars = total_portfolio_value - total_capital
 total_pl_pct = ((total_portfolio_value - total_capital) / total_capital) * 100 if total_capital else 0.0
-pl_class = "positive" if total_pl_dollars >= 0 else "negative"
+stock_pl_dollars = total_holding_value - total_cost_basis
+stock_pl_pct = (stock_pl_dollars / total_cost_basis) * 100 if total_cost_basis else 0.0
+pl_class = "positive" if stock_pl_dollars >= 0 else "negative"
 
 # ==========================================
 # 5. ALERT CHECKING
@@ -1423,6 +1427,7 @@ st.markdown(f"""
     <div class="item">
         <div class="label">Portfolio Value</div>
         <div class="value">${total_holding_value:,.2f}</div>
+        <div class="sub {pl_class}">{"+" if stock_pl_dollars >= 0 else ""}${stock_pl_dollars:,.2f} ({stock_pl_pct:+.2f}%)</div>
     </div>
     <div class="item">
         <div class="label">Dividends Earned</div>
@@ -1431,7 +1436,6 @@ st.markdown(f"""
     <div class="item">
         <div class="label">Total Account</div>
         <div class="value">${total_portfolio_value:,.2f}</div>
-        <div class="sub {pl_class}">{"+" if total_pl_dollars >= 0 else ""}${total_pl_dollars:,.2f} ({total_pl_pct:+.2f}%)</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
