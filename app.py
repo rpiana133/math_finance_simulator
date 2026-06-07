@@ -1726,11 +1726,21 @@ with main_tab3:
             live_pr, _, comp = fetch_stock_market_data(vol_ticker)
             if live_pr is not None:
                 st.markdown(f'<div style="font-size:2rem;font-weight:700;margin-bottom:0.5rem">${live_pr:.2f} <span style="font-size:0.9rem;font-weight:400;color:#6b7280">{comp}</span></div>', unsafe_allow_html=True)
-            research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
+            c1, c2 = st.columns([3, 1])
+            with c1:
+                research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
+            with c2:
+                chart_style = st.selectbox("Style", ["Line", "Candlestick"], key="chart_style", label_visibility="collapsed")
             hist2 = fetch_full_history(vol_ticker, period=research_chart_period)
             if hist2 is not None and len(hist2) > 5:
-                fig2 = plot_candlestick(vol_ticker, hist2, period_label=CHART_PERIODS[research_chart_period])
-                fig2.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
+                if chart_style == "Candlestick":
+                    fig2 = plot_candlestick(vol_ticker, hist2, period_label=CHART_PERIODS[research_chart_period])
+                else:
+                    fig2 = go.Figure()
+                    fig2.add_trace(go.Scatter(x=hist2.index, y=hist2['Close'], mode='lines', name=vol_ticker, line=dict(color='#2563eb', width=2)))
+                    fig2.update_layout(title=f"{vol_ticker} — {CHART_PERIODS[research_chart_period]}", yaxis_title="Price ($)", template="none", hovermode="x unified", margin=dict(l=0, r=0, t=30, b=0))
+                    fig2.update_yaxis(side="right")
+                fig2.update_layout(height=380)
                 st.plotly_chart(fig2, use_container_width=True, key="research_chart")
             else:
                 st.info("Not enough historical data.")
