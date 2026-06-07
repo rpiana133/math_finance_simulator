@@ -1537,6 +1537,9 @@ with main_tab1:
         st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab2:
+    if "trade_msg" in st.session_state:
+        st.success(f"✅ Trade executed! {st.session_state.trade_msg}")
+        del st.session_state.trade_msg
     tcol1, tcol2 = st.columns([1, 1.4])
     
     with tcol1:
@@ -1629,7 +1632,7 @@ with main_tab2:
                         })
                         save_student_profile(student_email, student_profile)
                         del st.session_state.pending_trade
-                        st.success(f"Bought {t['shares']:.4f} shares of {t['ticker']}!")
+                        st.session_state.trade_msg = f"Bought {t['shares']:.4f} shares of {t['ticker']}!"
                         st.rerun()
                     elif t['action'] == "Sell":
                         owned_shares = student_holdings[t['ticker']]['shares']
@@ -1656,7 +1659,7 @@ with main_tab2:
                         msg = f"Sold shares of {t['ticker']}!"
                         if tax > 0:
                             msg += f" (15% profit tax: -${tax:.2f})"
-                        st.success(msg)
+                        st.session_state.trade_msg = msg
                         st.rerun()
             with c2:
                 if st.button("❌ Cancel", use_container_width=True):
