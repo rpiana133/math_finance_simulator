@@ -1674,7 +1674,7 @@ with main_tab2:
             hist = fetch_full_history(trade_ticker, period=trade_chart_period)
             if hist is not None and len(hist) > 5:
                 fig = plot_candlestick(trade_ticker, hist, period_label=CHART_PERIODS[trade_chart_period])
-                fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=0))
+                fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=50))
                 st.plotly_chart(fig, use_container_width=True, key="trade_chart")
             else:
                 st.info("Not enough data to chart.")
@@ -1738,10 +1738,10 @@ with main_tab3:
                 else:
                     fig2 = go.Figure()
                     fig2.add_trace(go.Scatter(x=hist2.index, y=hist2['Close'], mode='lines', name=vol_ticker, line=dict(color='#2563eb', width=2)))
-                    fig2.update_layout(title=f"{vol_ticker} — {CHART_PERIODS[research_chart_period]}", yaxis_title="Price ($)", template="none", hovermode="x unified", margin=dict(l=0, r=0, t=30, b=0))
-                    fig2.update_xaxes(title="Date", tickformat="%b %d", tickangle=-30)
+                    fig2.update_layout(title=f"{vol_ticker} — {CHART_PERIODS[research_chart_period]}", yaxis_title="Price ($)", template="none", hovermode="x unified", margin=dict(l=0, r=0, t=30, b=50))
+                    fig2.update_xaxes(title="Date", tickformat="%b %d", nticks=6)
                     fig2.update_yaxes(side="right")
-                fig2.update_layout(height=380)
+                fig2.update_layout(height=380, margin=dict(l=0, r=0, t=35, b=50))
                 st.plotly_chart(fig2, use_container_width=True, key="research_chart")
             else:
                 st.info("Not enough historical data.")
