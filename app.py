@@ -1722,9 +1722,11 @@ with main_tab3:
     
     with rcol2:
         st.markdown('<div class="card"><h3>Price History</h3>', unsafe_allow_html=True)
-        chart_period_container = st.empty()
         if vol_ticker:
-            research_chart_period = chart_period_container.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
+            live_pr, _, comp = fetch_stock_market_data(vol_ticker)
+            if live_pr is not None:
+                st.markdown(f'<div style="font-size:2rem;font-weight:700;margin-bottom:0.5rem">${live_pr:.2f} <span style="font-size:0.9rem;font-weight:400;color:#6b7280">{comp}</span></div>', unsafe_allow_html=True)
+            research_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="research_chart_period", label_visibility="collapsed", index=3)
             hist2 = fetch_full_history(vol_ticker, period=research_chart_period)
             if hist2 is not None and len(hist2) > 5:
                 fig2 = plot_candlestick(vol_ticker, hist2, period_label=CHART_PERIODS[research_chart_period])
