@@ -1681,7 +1681,7 @@ with main_tab2:
         st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab3:
-    rcol1, rcol2 = st.columns([1, 1])
+    rcol1, rcol2 = st.columns([1, 2])
     
     with rcol1:
         st.markdown('<div class="card"><h3>Volatility Calculator</h3>', unsafe_allow_html=True)
