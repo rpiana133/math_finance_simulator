@@ -1686,12 +1686,17 @@ with main_tab3:
     with rcol1:
         st.markdown('<div class="card"><h3>Volatility Calculator</h3>', unsafe_allow_html=True)
         vol_ticker = stock_picker("vol")
+        vol_period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], key="vol_period", label_visibility="collapsed")
         if vol_ticker:
-            _, hist_vol, _ = fetch_stock_market_data(vol_ticker)
-        if vol_ticker and hist_vol is not None and len(hist_vol) >= 2:
-            hist_vol['Daily Change (%)'] = hist_vol['Close'].pct_change() * 100
-            clean = hist_vol[['Close', 'Daily Change (%)']].dropna()
+            try:
+                vol_data = _flatten_cols(yf.download(vol_ticker, period=vol_period, progress=False))
+            except Exception:
+                vol_data = None
+        if vol_ticker is not None and vol_data is not None and len(vol_data) >= 2:
+            vol_data['Daily Change (%)'] = vol_data['Close'].pct_change() * 100
+            clean = vol_data[['Close', 'Daily Change (%)']].dropna()
             std = clean['Daily Change (%)'].std()
+            period_label = {"1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "1y": "1 year"}.get(vol_period, vol_period)
             st.markdown(f"""
             <div class="metric-row">
                 <div class="metric-box">
@@ -1699,7 +1704,7 @@ with main_tab3:
                     <div class="m-value">{std:.2f}%</div>
                 </div>
                 <div class="metric-box">
-                    <div class="m-label">Typical Range (last 10 days)</div>
+                    <div class="m-label">Typical Range ({period_label})</div>
                     <div class="m-value">±{std:.2f}%</div>
                 </div>
             </div>
@@ -1712,7 +1717,7 @@ with main_tab3:
                 f"Higher volatility = less predictable price = bigger potential swings both ways."
             )
         else:
-            st.info("Need 2+ trading days to calculate volatility.")
+            st.info("Pick a stock to calculate volatility.")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with rcol2:
