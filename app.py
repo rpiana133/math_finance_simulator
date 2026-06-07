@@ -1290,7 +1290,7 @@ for ticker, position in list(student_holdings.items()):
         live_portfolio_data.append({
             "Ticker": ticker,
             "Shares": round(position['shares'], 4),
-            "Avg Purchase Price": f"${avg_purchase_price:.2f}",
+            "Cost Basis": f"${avg_purchase_price:.2f}",
             "Live Price": f"${live_price:.2f}",
             "Total Value": f"${current_val:.2f}",
             "Return": pct_return
