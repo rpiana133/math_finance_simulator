@@ -1706,7 +1706,7 @@ with main_tab3:
             """, unsafe_allow_html=True)
             risk = "very low" if std < 0.5 else "low" if std < 1.0 else "moderate" if std < 1.5 else "high" if std < 2.5 else "very high"
             st.caption(
-                f"**What this means:** {ticker} typically moves **±{std:.1f}%** per day. "
+                f"**What this means:** {vol_ticker} typically moves **±{std:.1f}%** per day. "
                 f"Risk level: **{risk}**. "
                 f"Volatility measures how much a stock's price jumps around day-to-day. "
                 f"Higher volatility = less predictable price = bigger potential swings both ways."
