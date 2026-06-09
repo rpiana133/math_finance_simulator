@@ -1,4 +1,4 @@
-streamlit
+nicegui
 yfinance
 pandas
 numpy
@@ -8,3 +8,4 @@ google-auth-httplib2
 google-auth-oauthlib
 google-cloud-storage
 plotly
+cachetools

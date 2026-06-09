@@ -1,6 +1,10 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
+from cachetools import TTLCache
+
+_cache_600 = TTLCache(maxsize=128, ttl=600)
+_cache_86400 = TTLCache(maxsize=64, ttl=86400)
+_cache_1800 = TTLCache(maxsize=4, ttl=1800)
 
 POPULAR_STOCKS = {
     "MMM": "3M",
@@ -620,14 +624,6 @@ def format_ticker_option(ticker):
 def parse_ticker_option(display_str):
     return display_str.split(" —")[0].strip()
 
-DISPLAY_OPTIONS = [format_ticker_option(t) for t in ALL_TICKERS]
-PICKER_PLACEHOLDER = "——— Select a ticker ———"
-
-def stock_picker(key):
-    selected = st.selectbox("Symbol", options=[PICKER_PLACEHOLDER] + DISPLAY_OPTIONS, key=key, label_visibility="collapsed")
-    ticker = parse_ticker_option(selected)
-    return ticker if selected != PICKER_PLACEHOLDER else None
-
 CHART_PERIODS = {
     "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
     "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
@@ -638,8 +634,23 @@ def _flatten_cols(df):
         df.columns = df.columns.get_level_values(0)
     return df
 
-@st.cache_data(ttl=600)
+def _cached(key, cache, func, *args):
+    if key in cache:
+        return cache[key]
+    result = func(*args)
+    cache[key] = result
+    return result
+
 def fetch_stock_market_data(ticker):
+    return _cached(f"price_{ticker}", _cache_600, _fetch_stock_market_data_impl, ticker)
+
+def fetch_full_history(ticker, period="3mo"):
+    return _cached(f"hist_{ticker}_{period}", _cache_600, _fetch_full_history_impl, ticker, period)
+
+def get_dividends(ticker):
+    return _cached(f"div_{ticker}", _cache_86400, _get_dividends_impl, ticker)
+
+def _fetch_stock_market_data_impl(ticker):
     try:
         data = _flatten_cols(yf.download(ticker, period="1y", progress=False))
         if data.empty:
@@ -659,8 +670,7 @@ def fetch_stock_market_data(ticker):
     except Exception:
         return None, None, None
 
-@st.cache_data(ttl=600)
-def fetch_full_history(ticker, period="3mo"):
+def _fetch_full_history_impl(ticker, period="3mo"):
     try:
         data = _flatten_cols(yf.download(ticker, period=period, progress=False))
         if data.empty:
@@ -669,8 +679,7 @@ def fetch_full_history(ticker, period="3mo"):
     except Exception:
         return None
 
-@st.cache_data(ttl=86400)
-def get_dividends(ticker):
+def _get_dividends_impl(ticker):
     try:
         t = yf.Ticker(ticker)
         divs = t.dividends
@@ -680,11 +689,11 @@ def get_dividends(ticker):
     except Exception:
         return None
 
-@st.cache_data(ttl=1800)
-def get_top_movers(tickers, max_batch=50):
-    """Fetch latest prices and daily % change for a list of tickers.
-    Returns list of (ticker, name, price, change_pct) sorted by change_pct descending.
-    """
+def get_top_movers(tickers):
+    key = f"movers_{hash(tuple(tickers))}"
+    return _cached(key, _cache_1800, _get_top_movers_impl, tickers)
+
+def _get_top_movers_impl(tickers, max_batch=50):
     all_results = []
     for i in range(0, len(tickers), max_batch):
         batch = tickers[i:i + max_batch]
