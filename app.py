@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 
 from utils.auth import init_auth_state, handle_legal_pages, get_client_config, handle_redirect, do_login
 from utils.storage import load_student_profile, save_student_profile, get_gcs_database
-from utils.market import fetch_stock_market_data, fetch_full_history, get_dividends, stock_picker, CHART_PERIODS
+from utils.market import fetch_stock_market_data, fetch_full_history, get_dividends, stock_picker, CHART_PERIODS, STOCK_TICKERS, ETF_TICKERS, get_top_movers
 from utils.charts import plot_candlestick
 
 # Page Configuration
@@ -578,16 +578,29 @@ with main_tab2:
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tcol2:
-        st.markdown('<div class="card" style="padding:0.5rem 1.25rem 1.25rem 1.25rem;">', unsafe_allow_html=True)
-        if trade_ticker:
-            trade_chart_period = st.selectbox("Period", options=list(CHART_PERIODS.keys()), format_func=lambda k: CHART_PERIODS[k], key="trade_chart_period", label_visibility="collapsed", index=3)
-            hist = fetch_full_history(trade_ticker, period=trade_chart_period)
-            if hist is not None and len(hist) > 5:
-                fig = plot_candlestick(trade_ticker, hist, period_label=CHART_PERIODS[trade_chart_period])
-                fig.update_layout(height=380, margin=dict(l=0, r=0, t=25, b=50))
-                st.plotly_chart(fig, use_container_width=True, key="trade_chart")
-            else:
-                st.info("Not enough data to chart.")
+        st.markdown('<div class="card"><h3>📊 Market Movers</h3>', unsafe_allow_html=True)
+        with st.spinner("Loading market data..."):
+            stock_movers = get_top_movers(STOCK_TICKERS)
+            etf_movers = get_top_movers(ETF_TICKERS)
+
+        def _show_movers(items, label):
+            gainers = [x for x in items if x[3] > 0][:5]
+            losers = [x for x in items if x[3] < 0][-5:][::-1]
+            if not gainers and not losers:
+                st.caption("No data available.")
+                return
+            if gainers:
+                st.markdown(f"**{label} ↑**")
+                for ticker, name, price, chg in gainers:
+                    st.markdown(f"**{ticker}** {name} — ${price:.2f} <span style='color:#10b981'>{chg:+.2f}%</span>", unsafe_allow_html=True)
+            if losers:
+                st.markdown(f"**{label} ↓**")
+                for ticker, name, price, chg in losers:
+                    st.markdown(f"**{ticker}** {name} — ${price:.2f} <span style='color:#f43f5e'>{chg:+.2f}%</span>", unsafe_allow_html=True)
+
+        _show_movers(stock_movers, "Stock Gainers")
+        st.markdown("<hr style='margin:0.5rem 0'>", unsafe_allow_html=True)
+        _show_movers(etf_movers, "ETF Gainers")
         st.markdown('</div>', unsafe_allow_html=True)
 
 with main_tab3:

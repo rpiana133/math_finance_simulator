@@ -541,7 +541,10 @@ POPULAR_STOCKS = {
     "TSM": "TSMC ADR",
     "UA": "Under Armour (Class C)",
     "UAA": "Under Armour (Class A)",
-    "UL": "Unilever ADR",
+    "UL": "Unilever ADR"
+}
+
+POPULAR_ETFS = {
     "SPY": "S&P 500 ETF", "QQQ": "Nasdaq 100 ETF", "IWM": "Russell 2000 ETF",
     "DIA": "Dow Jones ETF", "VTI": "Total Stock Market ETF",
     "VOO": "S&P 500 ETF (Vanguard)", "BND": "Total Bond Market ETF",
@@ -595,16 +598,21 @@ POPULAR_STOCKS = {
     "TLT": "20+ Year Treasury Bond ETF",
     "VNQ": "Vanguard Real Estate ETF",
     "VT": "Total World Stock ETF",
-    "VXUS": "Total International Stock ETF"
+    "VXUS": "Total International Stock ETF",
 }
 
-ALL_TICKERS = sorted(POPULAR_STOCKS.keys())
+STOCK_TICKERS = list(POPULAR_STOCKS.keys())
+ETF_TICKERS = list(POPULAR_ETFS.keys())
+ALL_TICKERS = sorted(STOCK_TICKERS + ETF_TICKERS)
+
+def _lookup_name(ticker):
+    return POPULAR_STOCKS.get(ticker) or POPULAR_ETFS.get(ticker)
 
 def get_company_name(ticker):
-    return POPULAR_STOCKS.get(ticker, ticker)
+    return _lookup_name(ticker) or ticker
 
 def format_ticker_option(ticker):
-    name = POPULAR_STOCKS.get(ticker)
+    name = _lookup_name(ticker)
     if name:
         return f"{ticker} — {name}"
     return ticker
@@ -671,3 +679,31 @@ def get_dividends(ticker):
         return divs
     except Exception:
         return None
+
+@st.cache_data(ttl=1800)
+def get_top_movers(tickers, max_batch=50):
+    """Fetch latest prices and daily % change for a list of tickers.
+    Returns list of (ticker, name, price, change_pct) sorted by change_pct descending.
+    """
+    all_results = []
+    for i in range(0, len(tickers), max_batch):
+        batch = tickers[i:i + max_batch]
+        try:
+            data = yf.download(" ".join(batch), period="5d", progress=False)
+            if data.empty:
+                continue
+            close_df = data['Close']
+            if len(close_df) >= 2:
+                pct = close_df.pct_change().iloc[-1] * 100
+                latest = close_df.iloc[-1]
+            else:
+                pct = pd.Series(0.0, index=close_df.columns)
+                latest = close_df.iloc[-1]
+            for ticker in batch:
+                if ticker in latest.index and not pd.isna(latest[ticker]):
+                    all_results.append((ticker, get_company_name(ticker),
+                                        float(latest[ticker]), float(pct.get(ticker, 0.0))))
+        except Exception:
+            continue
+    all_results.sort(key=lambda x: x[3], reverse=True)
+    return all_results
