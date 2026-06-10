@@ -356,8 +356,13 @@ def main_page():
                         raw = df['Return'].copy()
                         df['Return'] = df['Return'].map("{:+.2f}%".format)
                         t = ui.table.from_pandas(df).classes('w-full')
+                        t.add_slot('body-cell-Value', '''
+                            <td class="text-right align-middle">
+                                {{ props.row.Value }}
+                            </td>
+                        ''')
                         t.add_slot('body-cell-Return', '''
-                            <td :class="props.row.Return && props.row.Return.startsWith('-') ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold'">
+                            <td :class="'text-right align-middle ' + (props.row.Return && props.row.Return.startsWith('-') ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold')">
                                 {{ props.row.Return }}
                             </td>
                         ''')
