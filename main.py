@@ -1,4 +1,4 @@
-import os, logging
+import json, os, logging
 from datetime import datetime
 
 from nicegui import app, ui
@@ -13,7 +13,6 @@ from utils.market import (
     CHART_PERIODS, STOCK_TICKERS, ETF_TICKERS, get_top_movers,
     ALL_TICKERS, format_ticker_option,
 )
-from utils.charts import plot_candlestick
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -215,7 +214,7 @@ def main_page():
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
             ui.label('Classroom Stock Market Simulation').classes('text-gray-500 text-lg')
-            ui.button('Sign in with Google Workspace', on_click=lambda: ui.open('/login'), icon='login'
+            ui.button('Sign in with Google Workspace', on_click=lambda: ui.open('/login')
                      ).props('size=xl').classes('bg-blue-600 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl')
             with ui.row().classes('gap-4 mt-8 text-sm text-gray-400'):
                 ui.link('Privacy Policy', '/privacy')
@@ -240,6 +239,10 @@ def main_page():
 
     # ── UI ──
     ui.query('body').classes('bg-gray-50')
+    ui.add_head_html(
+        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>',
+        shared=True,
+    )
 
     # Topbar
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
@@ -577,13 +580,37 @@ def main_page():
                     cs_sel = ui.select(options={'Line': 'Line', 'Candlestick': 'Candlestick'}, value='Line', label='Style').classes('w-36')
                     chart_price = ui.label().classes('text-3xl font-bold')
                     chart_sub = ui.label().classes('text-sm text-gray-500')
-                    chart_plot = ui.plotly(go.Figure()).classes('w-full')
+                    ui.html('<div id="tvchart" style="width:100%;height:380px"></div>')
+
+                    ui.run_javascript('''
+if (!window.__tv) {
+    window.__tv = {};
+    var c = LightweightCharts.createChart(document.getElementById('tvchart'), {
+        layout: { textColor: '#1f2937', fontFamily: "'Inter',-apple-system,sans-serif", fontSize: 12 },
+        grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
+        timeScale: { borderColor: 'rgba(128,128,128,0.2)', timeVisible: false },
+        rightPriceScale: { borderColor: 'rgba(128,128,128,0.2)' },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        handleScroll: false, handleScale: false,
+    });
+    window.__tv.chart = c;
+    window.__tv.candle = c.addCandlestickSeries({
+        upColor: '#10b981', downColor: '#f43f5e',
+        borderUpColor: '#10b981', borderDownColor: '#f43f5e',
+        wickUpColor: '#10b981', wickDownColor: '#f43f5e',
+        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+    window.__tv.line = c.addLineSeries({
+        color: '#3b82f6', lineWidth: 2,
+        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+}
+                    ''')
 
                     def _chart():
                         t = vs.value
                         if not t:
                             chart_price.set_text(''); chart_sub.set_text('')
-                            chart_plot.update_figure(go.Figure())
                             return
                         pr, _, company = fetch_stock_market_data(t)
                         chart_price.set_text(f'${pr:.2f}' if pr else '')
@@ -592,24 +619,29 @@ def main_page():
                         style = cs_sel.value
                         hist = fetch_full_history(t, period=period)
                         if hist is None or len(hist) <= 5:
-                            fig = go.Figure()
-                            fig.add_annotation(text="Not enough data", x=0.5, y=0.5, showarrow=False)
-                            chart_plot.update_figure(fig)
+                            ui.run_javascript(
+                                'window.__tv.candle.setData([]);window.__tv.line.setData([]);')
                             return
-                        if style == 'Candlestick':
-                            fig = plot_candlestick(t, hist, period_label=CHART_PERIODS.get(period, ''))
-                        else:
-                            fig = go.Figure()
-                            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines',
-                                                     name=t, line=dict(color='#3b82f6', width=2)))
-                            fig.update_layout(title=f"{t} — {CHART_PERIODS.get(period, period)}",
-                                              yaxis_title="Price ($)", template="plotly_white",
-                                              hovermode="x unified", margin=dict(l=0,r=0,t=30,b=50),
-                                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            fig.update_xaxes(title="Date", tickformat="%b %d", nticks=6, gridcolor='rgba(128,128,128,0.1)')
-                            fig.update_yaxes(side="right", gridcolor='rgba(128,128,128,0.1)')
-                        fig.update_layout(height=380, margin=dict(l=0,r=0,t=35,b=50))
-                        chart_plot.update_figure(fig)
+
+                        data = []
+                        for idx, row in hist.iterrows():
+                            data.append({
+                                'time': int(idx.timestamp()),
+                                'open': float(row['Open']),
+                                'high': float(row['High']),
+                                'low': float(row['Low']),
+                                'close': float(row['Close']),
+                            })
+                        line_data = [{'time': d['time'], 'value': d['close']} for d in data]
+                        candle_vis = 'true' if style == 'Candlestick' else 'false'
+                        line_vis = 'true' if style == 'Line' else 'false'
+                        ui.run_javascript(f'''
+window.__tv.candle.setData({json.dumps(data)});
+window.__tv.line.setData({json.dumps(line_data)});
+window.__tv.candle.applyOptions({{visible: {candle_vis}}});
+window.__tv.line.applyOptions({{visible: {line_vis}}});
+window.__tv.chart.timeScale().fitContent();
+                        ''')
 
                     cp_sel.on('change', _chart)
                     cs_sel.on('change', _chart)
