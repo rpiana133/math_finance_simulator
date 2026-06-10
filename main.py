@@ -105,7 +105,7 @@ def callback_page():
             'email': user_info['email'],
             'name': user_info.get('name', 'Student'),
         })
-        ui.open('/')
+        ui.html('<meta http-equiv="refresh" content="0;url=/"/>')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         err_msg = str(e) or 'Unknown error'
