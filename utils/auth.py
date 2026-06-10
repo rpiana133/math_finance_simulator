@@ -27,11 +27,11 @@ def get_client_config():
     raise KeyError("GOOGLE_CLIENT_SECRET environment variable not set")
 
 
-def get_auth_url():
+def get_auth_url(redirect_uri=None):
     client_config = get_client_config()
     flow = Flow.from_client_config(
         client_config, scopes=SCOPES,
-        redirect_uri=get_redirect_uri()
+        redirect_uri=redirect_uri or get_redirect_uri()
     )
     flow.autogenerate_code_verifier = False
     flow.code_verifier = None

@@ -213,8 +213,8 @@ def _check_alerts(profile: dict):
 @ui.page('/')
 def main_page():
     if not app.storage.user.get('authenticated'):
-        ui.query('body').classes('bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen')
-        login_url = get_auth_url()
+        base = str(ui.context.client.request.base_url).rstrip('/')
+        login_url = get_auth_url(redirect_uri=base + '/callback')
         with ui.column().classes('items-center justify-center min-h-screen gap-6'):
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
