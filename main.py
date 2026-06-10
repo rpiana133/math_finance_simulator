@@ -254,10 +254,9 @@ def main_page():
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
             with ui.row().classes('items-center'):
-                ui.icon('account_circle').props('size=sm').classes('text-gray-500 q-mr-xs')
-                with ui.column().classes('gap-0'):
-                    ui.label(name).classes('text-sm text-gray-600')
-                    ui.label(email).classes('text-xs text-gray-400')
+                ui.icon('account_circle').props('size=sm').classes('text-gray-500')
+                ui.label(f'{name}').style('font-size: 0.875rem; color: #4b5563; margin-left: 4px;')
+                ui.label(f'({email})').style('font-size: 0.75rem; color: #9ca3af; margin-left: 4px;')
 
     # Summary bar
     @ui.refreshable
@@ -335,21 +334,21 @@ def main_page():
                         sl.append(t); sc.append(palette[i % len(palette)])
 
                 if l1 or sl:
-                    with ui.row().classes('w-full'):
+                    with ui.row().style('width: 100%'):
                         if l1:
                             fig = go.Figure(data=[go.Pie(labels=l1, values=v1, hole=0.4,
                                 marker=dict(colors=c1, line=dict(color='white', width=2)),
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            ui.plotly(fig).classes('flex-1')
+                            with ui.column().style('width: 50%; display: inline-block'): ui.plotly(fig).style('width: 100%; height: 240px')
                         if sl:
                             fig = go.Figure(data=[go.Pie(labels=sl, values=sv, hole=0.4,
                                 marker=dict(colors=sc, line=dict(color='white', width=2)),
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            ui.plotly(fig).classes('flex-1')
+                            with ui.column().style('width: 50%; display: inline-block'): ui.plotly(fig).style('width: 100%; height: 240px')
 
                 with ui.card().classes('w-full p-4 mt-4'):
                     ui.label('Positions').classes('font-bold text-lg mb-2')
