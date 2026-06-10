@@ -619,7 +619,7 @@ def main_page():
                     cs_sel = ui.select(options={'Line': 'Line', 'Candlestick': 'Candlestick'}, value='Line', label='Style').classes('w-36')
                     chart_price = ui.label().classes('text-3xl font-bold')
                     chart_sub = ui.label().classes('text-sm text-gray-500')
-                    ui.html('<div id="tvchart" style="width:100%;height:380px"></div>')
+                    ui.html('<div id="tvchart" style="width:100%;height:380px"></div>', sanitize=False)
 
                     ui.run_javascript('''
 if (!window.__tv) {
