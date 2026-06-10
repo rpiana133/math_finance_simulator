@@ -372,7 +372,7 @@ def main_page():
         with ui.tab_panel(tt):
             pending = {'data': None}
             opts = {t: format_ticker_option(t) for t in ALL_TICKERS}
-            sel = ui.select(options=opts, label='Symbol', with_autocomplete=True, clearable=True).classes('w-full')
+            sel = ui.select(options=opts, label='Symbol', clearable=True).classes('w-full')
 
             price_val = ui.label().classes('text-xl font-bold text-gray-900')
             price_sub = ui.label().classes('text-sm text-gray-500')
@@ -541,7 +541,7 @@ def main_page():
             with ui.row().classes('w-full gap-4'):
                 with ui.card().classes('w-1/3 p-4'):
                     ui.label('Volatility Calculator').classes('font-bold text-lg mb-3')
-                    vs = ui.select(options=opts, label='Symbol', with_autocomplete=True, clearable=True).classes('w-full')
+                    vs = ui.select(options=opts, label='Symbol', clearable=True).classes('w-full')
                     vp = ui.select(options=CHART_PERIODS, value='3mo', label='Period').classes('w-full')
                     v_std = ui.label('—').classes('text-2xl font-bold')
                     v_range = ui.label('—').classes('text-2xl font-bold')
@@ -653,7 +653,7 @@ window.__tv.chart.timeScale().fitContent();
             with ui.card().classes('w-full p-4'):
                 ui.label('Price Alerts').classes('font-bold text-lg mb-2')
                 ui.label('Notify when a stock crosses a target price.').classes('text-sm text-gray-500 mb-3')
-                asel = ui.select(options=opts, label='Symbol', with_autocomplete=True, clearable=True).classes('w-56')
+                asel = ui.select(options=opts, label='Symbol', clearable=True).classes('w-56')
                 adir = ui.select(options={'above': 'Above', 'below': 'Below'}, value='above').classes('w-32')
                 apr = ui.number(label='Target Price', value=200.0, min=0.01, step=1.0).classes('w-32')
 
