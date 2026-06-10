@@ -105,7 +105,8 @@ def callback_page():
             'email': user_info['email'],
             'name': user_info.get('name', 'Student'),
         })
-        ui.run_javascript('setTimeout(()=>{window.location.href="/"},500)')
+        ui.label('✅ Authentication successful!').classes('text-green-500 text-xl')
+        ui.link('Go to Dashboard →', '/').classes('text-blue-600 text-lg')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         err_msg = str(e) or 'Unknown error'
