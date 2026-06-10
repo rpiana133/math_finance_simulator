@@ -250,7 +250,7 @@ def main_page():
     )
 
     # Topbar
-    with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
+    with ui.header().style('background-color: red !important; color: white !important;'):
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
             with ui.row().classes('items-center'):
