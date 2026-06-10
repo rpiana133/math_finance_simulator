@@ -99,7 +99,8 @@ def callback_page():
         ui.link('Back to login', '/').classes('text-blue-600')
         return
     try:
-        user_info = exchange_code(code)
+        redirect_uri = str(ui.context.client.request.base_url).rstrip('/') + '/callback'
+        user_info = exchange_code(code, redirect_uri=redirect_uri)
         app.storage.user.update({
             'authenticated': True,
             'email': user_info['email'],

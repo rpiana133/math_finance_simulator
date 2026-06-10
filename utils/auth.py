@@ -39,11 +39,11 @@ def get_auth_url():
     return auth_url
 
 
-def exchange_code(code):
+def exchange_code(code, redirect_uri=None):
     client_config = get_client_config()
     flow = Flow.from_client_config(
         client_config, scopes=SCOPES,
-        redirect_uri=get_redirect_uri()
+        redirect_uri=redirect_uri or get_redirect_uri()
     )
     flow.autogenerate_code_verifier = False
     flow.code_verifier = None
