@@ -1,4 +1,4 @@
-nicegui
+nicegui>=2.4.0
 yfinance
 pandas
 numpy
