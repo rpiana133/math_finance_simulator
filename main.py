@@ -113,7 +113,7 @@ def callback_page():
             'name': user_info.get('name', 'Student'),
         })
         ui.label('✅ Authentication successful! Redirecting...').classes('text-green-500 text-xl')
-        ui.html('<script>setTimeout(function(){window.location.href="/"},500)</script>')
+        ui.add_body_html('<script>setTimeout(function(){window.location.href="/"},500)</script>')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         err_msg = str(e) or 'Unknown error'
