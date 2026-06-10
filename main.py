@@ -108,8 +108,10 @@ def callback_page():
         ui.open('/')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
+        err_msg = str(e) or 'Unknown error'
         ui.label('Authentication failed.').classes('text-red-500 text-xl')
-        ui.link('Try again', '/login').classes('text-blue-600')
+        ui.label(f'Details: {err_msg[:300]}').classes('text-red-400 text-sm mt-2 font-mono')
+        ui.link('Try again', '/').classes('text-blue-600')
 
 # ── Data helpers ─────────────────────────────────────────
 def _portfolio(profile: dict):
