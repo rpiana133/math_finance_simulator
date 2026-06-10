@@ -21,6 +21,9 @@ def _gcs_creds():
             return json.loads(raw)
         except Exception:
             pass
+    if os.path.exists("math-finance-simulator-51d674093aa1.json"):
+        with open("math-finance-simulator-51d674093aa1.json", "r") as f:
+            return json.load(f)
     fields = {
         "type": "service_account",
         "project_id": os.environ.get("project_id", ""),
