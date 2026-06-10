@@ -99,8 +99,10 @@ def callback_page():
         ui.link('Back to login', '/').classes('text-blue-600')
         return
     try:
-        redirect_uri = str(ui.context.client.request.base_url).rstrip('/') + '/callback'
-        user_info = exchange_code(code, redirect_uri=redirect_uri)
+        base = str(ui.context.client.request.base_url).rstrip('/')\
+            .replace('http://', 'https://') if 'run.app' in str(ui.context.client.request.base_url)\
+            else str(ui.context.client.request.base_url).rstrip('/')
+        user_info = exchange_code(code, redirect_uri=base + '/callback')
         app.storage.user.update({
             'authenticated': True,
             'email': user_info['email'],
@@ -213,9 +215,11 @@ def _check_alerts(profile: dict):
 @ui.page('/')
 def main_page():
     if not app.storage.user.get('authenticated'):
-        base = str(ui.context.client.request.base_url).rstrip('/')
+        base = str(ui.context.client.request.base_url).rstrip('/')\
+            .replace('http://', 'https://') if 'run.app' in str(ui.context.client.request.base_url)\
+            else str(ui.context.client.request.base_url).rstrip('/')
         login_url = get_auth_url(redirect_uri=base + '/callback')
-        with ui.column().classes('items-center justify-center min-h-screen gap-6'):
+        with ui.column().classes('items-center justify-center min-h-screen gap-6').style('background: linear-gradient(135deg, #eff6ff, #eef2ff)'):
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
             ui.label('Classroom Stock Market Simulation').classes('text-gray-500 text-lg')
