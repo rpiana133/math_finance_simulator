@@ -251,10 +251,11 @@ def main_page():
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
-            with ui.row().classes('items-center gap-3'):
+            with ui.row().classes('items-center gap-2'):
                 ui.icon('account_circle').classes('text-gray-500')
-                ui.label(name).classes('text-sm text-gray-600')
-                ui.label(email).classes('text-xs text-gray-400')
+                with ui.column().classes('gap-0'):
+                    ui.label(name).classes('text-sm text-gray-600 leading-tight')
+                    ui.label(email).classes('text-xs text-gray-400 leading-tight')
 
     # Summary bar
     @ui.refreshable
@@ -332,21 +333,21 @@ def main_page():
                         sl.append(t); sc.append(palette[i % len(palette)])
 
                 if l1 or sl:
-                    with ui.row().classes('w-full gap-4'):
+                    with ui.row().classes('w-full gap-2'):
                         if l1:
                             fig = go.Figure(data=[go.Pie(labels=l1, values=v1, hole=0.4,
                                 marker=dict(colors=c1, line=dict(color='white', width=2)),
-                                textinfo='label+percent', textposition='outside', textfont=dict(size=11))])
-                            fig.update_layout(height=280, margin=dict(l=0,r=0,t=0,b=0),
+                                textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
+                            fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().classes('flex-1'): ui.plotly(fig)
+                            with ui.column().classes('w-1/2'): ui.plotly(fig).classes('w-full')
                         if sl:
                             fig = go.Figure(data=[go.Pie(labels=sl, values=sv, hole=0.4,
                                 marker=dict(colors=sc, line=dict(color='white', width=2)),
-                                textinfo='label+percent', textposition='outside', textfont=dict(size=11))])
-                            fig.update_layout(height=280, margin=dict(l=0,r=0,t=0,b=0),
+                                textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
+                            fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().classes('flex-1'): ui.plotly(fig)
+                            with ui.column().classes('w-1/2'): ui.plotly(fig).classes('w-full')
 
                 with ui.card().classes('w-full p-4 mt-4'):
                     ui.label('Positions').classes('font-bold text-lg mb-2')
