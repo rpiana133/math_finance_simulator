@@ -91,12 +91,15 @@ def terms_page():
         ui.link('← Back to App', '/').classes('text-blue-600 mt-8')
 
 def get_dynamic_redirect_uri(request):
-    env_uri = os.environ.get("REDIRECT_URI")
+    env_uri = os.environ.get("REDIRECT_URI", "").strip()
     if env_uri:
+        logger.info("Using REDIRECT_URI env var: %s", env_uri)
         return env_uri
-    base_url = str(request.base_url)
+    base_url = str(request.base_url).strip()
     if 'run.app' in base_url:
-        return base_url.replace('http://', 'https://').rstrip('/') + '/callback'
+        result = base_url.replace('http://', 'https://').rstrip('/') + '/callback'
+        logger.info("Auto-detected redirect URI: %s", result)
+        return result
     return "http://localhost:8080/callback"
 
 # ── Auth callback ────────────────────────────────────────
