@@ -210,11 +210,12 @@ def _check_alerts(profile: dict):
 def main_page():
     if not app.storage.user.get('authenticated'):
         ui.query('body').classes('bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen')
+        login_url = get_auth_url()
         with ui.column().classes('items-center justify-center min-h-screen gap-6'):
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
             ui.label('Classroom Stock Market Simulation').classes('text-gray-500 text-lg')
-            ui.link('Sign in with Google Workspace', '/login'
+            ui.link('Sign in with Google Workspace', target=login_url
                      ).classes('bg-blue-600 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl text-lg font-semibold no-underline inline-block text-center')
             with ui.row().classes('gap-4 mt-8 text-sm text-gray-400'):
                 ui.link('Privacy Policy', '/privacy')
