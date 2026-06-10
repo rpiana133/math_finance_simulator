@@ -653,8 +653,12 @@ def get_dividends(ticker):
 def _fetch_stock_market_data_impl(ticker):
     try:
         import math
-        data = _flatten_cols(yf.download(ticker, period="5d", progress=False, timeout=5))
-        if data.empty:
+        data = None
+        for period in ("5d", "1mo", "6mo"):
+            data = _flatten_cols(yf.download(ticker, period=period, progress=False, timeout=15))
+            if data is not None and not data.empty:
+                break
+        if data is None or data.empty:
             return None, None, None
         close_price = float(data['Close'].squeeze().iloc[-1])
         if math.isnan(close_price):

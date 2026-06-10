@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 # ── Shared head HTML (loaded before any page) ─────────────
 ui.add_head_html(
-    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
+    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">'
+    '<link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.2/iconfont/material-icons.css" rel="stylesheet">',
     shared=True,
 )
 
@@ -253,18 +254,13 @@ def main_page():
     profile["name"] = name
     profile.setdefault("total_dividends_earned", 0.0)
 
-    # Warm price cache for all tickers in the class database in a single batch call
+    # Warm price cache for current user's holdings and alerts (not the entire class)
     try:
-        db = get_gcs_database()
         tickers_to_warm = set()
         for t in profile.get('holdings', {}).keys():
             tickers_to_warm.add(t)
         for a in profile.get('alerts', []):
             tickers_to_warm.add(a['ticker'])
-        if db:
-            for e, p in db.items():
-                for t in p.get('holdings', {}).keys():
-                    tickers_to_warm.add(t)
         if tickers_to_warm:
             warm_price_cache(list(tickers_to_warm))
     except Exception as e:
@@ -286,10 +282,10 @@ def main_page():
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
-            with ui.row().classes('items-center'):
+            with ui.row().classes('items-center').style('overflow: hidden;'):
                 ui.icon('account_circle').props('size=sm').classes('text-gray-500')
-                ui.label(f'{name}').style('font-size: 0.875rem; color: #4b5563; margin-left: 4px;')
-                ui.label(f'({email})').style('font-size: 0.75rem; color: #9ca3af; margin-left: 4px;')
+                ui.label(f'{name}').style('font-size: 0.875rem; color: #4b5563; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px;')
+                ui.label(f'({email})').style('font-size: 0.75rem; color: #9ca3af; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;')
 
     # Summary bar
     @ui.refreshable
@@ -343,7 +339,7 @@ def main_page():
                 intl = {"VWO","VEA","EFA","IEMG","FXI","EWJ","EWG","EWZ",
                         "INDA","KWEB","EEM","FLTW","TAN","ICLN"}
                 l1, v1, c1 = [], [], []
-                if p['cash'] > 0:
+                if p['cash'] >= 0:
                     l1.append("Cash"); v1.append(p['cash']); c1.append("#3b82f6")
                 if p['unsettled'] > 0:
                     l1.append("Unsettled"); v1.append(p['unsettled']); c1.append("#f59e0b")

@@ -1,6 +1,20 @@
 # Changelog
 
-## 2026-05-28
+## 2026-06-10
+
+### Fixed
+- Removed `get_gcs_database()` call from page load warmup (was fetching ALL student profiles from GCS on every login, causing timeout)
+- `_fetch_stock_market_data_impl` now tries period fallbacks (5d → 1mo → 6mo) with 15s timeout instead of single 5d/5s attempt
+- Added cdnjs fallback for Material Icons font (fixes "arrow_drop_down", "chevron_left" text rendering)
+- Pie charts always render "Cash" slice even at $0 (empty positions no longer hides charts entirely)
+- Header name/email labels now truncate with ellipsis instead of overlapping the account icon
+- Replaced `@ui.page('/callback')` with FastAPI `@app.get('/callback')` to avoid WebSocket disconnect during OAuth exchange
+- Added `load_student_profile` var and `warm_price_cache` for batch price fetching
+- Added `timeout=5` to all yfinance calls
+
+### Changed
+- Merged antigravity's credential file fallbacks (reads `client_secret.json`/service-account JSON from disk if env vars missing)
+- Redirect URI auto-detected from request URL instead of env var (fixes redirect_uri_mismatch across environments)
 
 ### Added
 - Portfolio allocation donut chart (cash vs holdings) at top of Portfolio tab
