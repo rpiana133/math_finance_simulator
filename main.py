@@ -219,7 +219,7 @@ def main_page():
             .replace('http://', 'https://') if 'run.app' in str(ui.context.client.request.base_url)\
             else str(ui.context.client.request.base_url).rstrip('/')
         login_url = get_auth_url(redirect_uri=base + '/callback')
-        with ui.column().classes('items-center justify-center min-h-screen gap-6').style('background: linear-gradient(135deg, #eff6ff, #eef2ff)'):
+        with ui.column().classes('items-center justify-center min-h-screen gap-6'):
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
             ui.label('Classroom Stock Market Simulation').classes('text-gray-500 text-lg')
@@ -258,10 +258,10 @@ def main_page():
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
-            with ui.row().classes('items-center gap-2 flex-nowrap overflow-hidden'):
-                ui.icon('account_circle').props('size=sm').classes('text-gray-500 flex-shrink-0')
-                ui.label(f'{name}').classes('text-sm text-gray-700 font-medium whitespace-nowrap')
-                ui.label(f'({email})').classes('text-xs text-gray-400 truncate max-w-[120px] sm:max-w-[200px]')
+            with ui.row().classes('items-center'):
+                ui.icon('account_circle').props('size=sm').classes('text-gray-500')
+                ui.label(f'{name}').style('font-size: 0.875rem; color: #4b5563; margin-left: 4px;')
+                ui.label(f'({email})').style('font-size: 0.75rem; color: #9ca3af; margin-left: 4px;')
 
     # Summary bar
     @ui.refreshable
@@ -276,9 +276,9 @@ def main_page():
             ("Dividends Earned", f"${profile.get('total_dividends_earned', 0.0):,.2f}", 'text-green-600'),
             ("Total Account", f"${p['total']:,.2f}", 'text-gray-900'),
         ]
-        with ui.row().classes('w-full gap-4 sm:gap-0 bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-wrap sm:flex-nowrap'):
+        with ui.row().style('width: 100%; gap: 0; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-bottom: 1px solid #e5e7eb; padding: 1rem 1.5rem;'):
             for label, val, color in rows:
-                with ui.column().classes('flex-1 min-w-[120px] sm:min-w-0'):
+                with ui.column().style('flex: 1; min-width: 0;'):
                     ui.label(label).classes('text-xs text-gray-400 uppercase tracking-wider font-medium')
                     ui.label(val).classes(f'text-xl font-bold {color}')
                     if label == "Portfolio Value":
@@ -339,21 +339,21 @@ def main_page():
                         sl.append(t); sc.append(palette[i % len(palette)])
 
                 if l1 or sl:
-                    with ui.row().classes('w-full gap-4 flex-col md:flex-row'):
+                    with ui.row().style('width: 100%; gap: 1rem;'):
                         if l1:
                             fig = go.Figure(data=[go.Pie(labels=l1, values=v1, hole=0.4,
                                 marker=dict(colors=c1, line=dict(color='white', width=2)),
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().classes('flex-1 w-full items-center justify-center'): ui.plotly(fig).classes('w-full h-[240px]')
+                            with ui.column().style('flex: 1; width: 100%; align-items: center; justify-content: center;'): ui.plotly(fig).style('width: 100%; height: 240px')
                         if sl:
                             fig = go.Figure(data=[go.Pie(labels=sl, values=sv, hole=0.4,
                                 marker=dict(colors=sc, line=dict(color='white', width=2)),
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().classes('flex-1 w-full items-center justify-center'): ui.plotly(fig).classes('w-full h-[240px]')
+                            with ui.column().style('flex: 1; width: 100%; align-items: center; justify-content: center;'): ui.plotly(fig).style('width: 100%; height: 240px')
 
                 with ui.card().classes('w-full p-4 mt-4'):
                     ui.label('Positions').classes('font-bold text-lg mb-2')
@@ -393,7 +393,8 @@ def main_page():
             action = ui.radio(['Buy', 'Sell'], value='Buy').props('inline dense').classes('mt-1')
             mode = ui.radio(['Shares', 'Amount ($)'], value='Shares').props('inline dense')
             shares_in = ui.number(label='Shares', value=1.0, min=0.001, step=0.1, format='%.4f').classes('w-full')
-            amount_in = ui.number(label='Amount ($)', value=100.0, min=1.0, step=10.0).classes('w-full').set_visibility(False)
+            amount_in = ui.number(label='Amount ($)', value=100.0, min=1.0, step=10.0).classes('w-full')
+            amount_in.set_visibility(False)
             preview = ui.label().classes('text-sm text-gray-500 mt-1')
 
             def _upd_sel():
@@ -507,8 +508,8 @@ def main_page():
                 confirm_card.refresh()
 
             # Layout
-            with ui.row().classes('w-full gap-4 flex-col md:flex-row'):
-                with ui.card().classes('flex-1 w-full md:w-auto p-4'):
+            with ui.row().style('width: 100%; gap: 1rem;'):
+                with ui.card().style('flex: 1; padding: 1rem;'):
                     ui.label('Trade Ticket').classes('font-bold text-lg mb-3')
                     sel
                     with ui.row().classes('items-baseline gap-2 mt-1'):
@@ -520,7 +521,7 @@ def main_page():
                     ui.button('📋 Review Order', on_click=_review).props('color=primary').classes('w-full mt-2')
                     confirm_card()
 
-                with ui.card().classes('flex-1 w-full md:w-auto p-4'):
+                with ui.card().style('flex: 1; padding: 1rem;'):
                     ui.label('📊 Market Movers').classes('font-bold text-lg mb-3')
                     @ui.refreshable
                     def movers():
@@ -552,8 +553,8 @@ def main_page():
 
         # ── RESEARCH ─────────────────────────────────────
         with ui.tab_panel(tr):
-            with ui.row().classes('w-full gap-4 flex-col md:flex-row'):
-                with ui.card().classes('w-full md:w-1/3 p-4'):
+            with ui.row().style('width: 100%; gap: 1rem;'):
+                with ui.card().style('width: 33%; padding: 1rem;'):
                     ui.label('Volatility Calculator').classes('font-bold text-lg mb-3')
                     vs = ui.select(options=opts, label='Search symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
                     vp = ui.select(options=CHART_PERIODS, value='3mo', label='Period').classes('w-full')
@@ -589,7 +590,7 @@ def main_page():
                             v_range
                     v_desc
 
-                with ui.card().classes('flex-1 w-full p-4 overflow-hidden'):
+                with ui.card().style('flex: 1; padding: 1rem;'):
                     ui.label('Price History').classes('font-bold text-lg mb-3')
                     cp_sel = ui.select(options=CHART_PERIODS, value='3mo', label='Period').classes('w-40')
                     cs_sel = ui.select(options={'Line': 'Line', 'Candlestick': 'Candlestick'}, value='Line', label='Style').classes('w-36')
