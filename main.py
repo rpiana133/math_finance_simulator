@@ -18,6 +18,12 @@ from utils.market import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Shared head HTML (loaded before any page) ─────────────
+ui.add_head_html(
+    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
+    shared=True,
+)
+
 # ── Profile cache ────────────────────────────────────────
 _profiles: dict = {}
 
@@ -134,7 +140,7 @@ def _portfolio(profile: dict):
     live = []
     for ticker, pos in list(holdings.items()):
         price, _, _ = fetch_stock_market_data(ticker)
-        if price is not None:
+        if price is not None and not __import__('math').isnan(price):
             cv = pos['shares'] * price
             total_hold += cv
             total_cost += pos['total_cost']
@@ -272,8 +278,7 @@ def main_page():
     # ── UI ──
     ui.query('body').classes('bg-gray-50')
     ui.add_head_html(
-        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>'
-        '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
+        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>',
         shared=True,
     )
 
