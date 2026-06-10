@@ -4,7 +4,8 @@ from datetime import datetime
 from nicegui import app, ui
 import pandas as pd
 import plotly.graph_objects as go
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi import Request
 
 from utils.auth import get_auth_url, exchange_code, is_teacher
 from utils.storage import load_student_profile, save_student_profile, get_gcs_database
@@ -103,29 +104,25 @@ def get_dynamic_redirect_uri(request):
     return "http://localhost:8080/callback"
 
 # ── Auth callback ────────────────────────────────────────
-@ui.page('/callback')
-def callback_page():
-    code = ui.context.client.request.query_params.get('code')
-    if not code:
-        ui.label('No authorization code received.').classes('text-red-500')
-        ui.link('Back to login', '/').classes('text-blue-600')
-        return
+@app.get('/callback')
+async def callback_route(code: str, request: Request):
+    base = str(request.base_url).replace('http://', 'https://').rstrip('/')
+    redirect_uri = base + '/callback'
     try:
-        redirect_uri = get_dynamic_redirect_uri(ui.context.client.request)
         user_info = exchange_code(code, redirect_uri=redirect_uri)
         app.storage.user.update({
             'authenticated': True,
             'email': user_info['email'],
             'name': user_info.get('name', 'Student'),
         })
-        ui.label('✅ Authentication successful!').classes('text-green-500 text-xl')
-        ui.link('Go to Dashboard →', '/').classes('text-blue-600 text-lg')
+        return RedirectResponse('/')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
-        err_msg = str(e) or 'Unknown error'
-        ui.label('Authentication failed.').classes('text-red-500 text-xl')
-        ui.label(f'Details: {err_msg[:300]}').classes('text-red-400 text-sm mt-2 font-mono')
-        ui.link('Try again', '/').classes('text-blue-600')
+        return HTMLResponse(f"""
+            <h2 style="color:#ef4444;font-family:sans-serif">Authentication failed</h2>
+            <p style="font-family:monospace;color:#6b7280">{str(e)[:300]}</p>
+            <a href="/" style="color:#2563eb">Try again</a>
+        """)
 
 # ── Data helpers ─────────────────────────────────────────
 def _portfolio(profile: dict):
