@@ -24,20 +24,7 @@ def _gcs_creds():
     if os.path.exists("math-finance-simulator-51d674093aa1.json"):
         with open("math-finance-simulator-51d674093aa1.json", "r") as f:
             return json.load(f)
-    fields = {
-        "type": "service_account",
-        "project_id": os.environ.get("project_id", ""),
-        "private_key_id": os.environ.get("private_key_id", ""),
-        "private_key": os.environ.get("private_key", ""),
-        "client_email": os.environ.get("client_email", ""),
-        "client_id": os.environ.get("client_id", ""),
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": os.environ.get("client_x509_cert_url", ""),
-        "universe_domain": "googleapis.com"
-    }
-    return fields
+    raise KeyError("GCS_SERVICE_ACCOUNT environment variable not set (and no JSON key file found)")
 
 
 def _gcs_token():

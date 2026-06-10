@@ -652,27 +652,48 @@ def get_dividends(ticker):
 
 def _fetch_stock_market_data_impl(ticker):
     try:
-        data = _flatten_cols(yf.download(ticker, period="1y", progress=False))
-        if data.empty:
-            data = _flatten_cols(yf.download(ticker, period="6mo", progress=False))
-        if data.empty:
-            data = _flatten_cols(yf.download(ticker, period="1mo", progress=False))
+        data = _flatten_cols(yf.download(ticker, period="5d", progress=False, timeout=5))
         if data.empty:
             return None, None, None
         close_price = float(data['Close'].squeeze().iloc[-1])
-        try:
-            info = yf.Ticker(ticker).info
-            company_name = info.get('shortName') or info.get('longName') or ticker
-        except Exception:
-            company_name = ticker
-        recent = data.tail(10) if len(data) >= 10 else data
-        return close_price, recent, company_name
+        company_name = get_company_name(ticker)
+        return close_price, None, company_name
     except Exception:
         return None, None, None
 
+def warm_price_cache(tickers):
+    # Filter out tickers that are already cached to avoid redundant network calls
+    uncached = [t for t in tickers if f"price_{t}" not in _cache_600]
+    if not uncached:
+        return
+    
+    try:
+        # Download all uncached tickers in a single batch
+        data = _flatten_cols(yf.download(" ".join(uncached), period="5d", progress=False, timeout=5))
+        if data.empty:
+            return
+        
+        # Loop through each ticker and extract its latest price
+        for t in uncached:
+            try:
+                if len(uncached) == 1:
+                    close_df = data['Close']
+                else:
+                    close_df = data['Close'][t]
+                
+                close_series = close_df.squeeze()
+                valid_closes = close_series.dropna()
+                if not valid_closes.empty:
+                    price = float(valid_closes.iloc[-1])
+                    _cache_600[f"price_{t}"] = (price, None, get_company_name(t))
+            except Exception:
+                continue
+    except Exception:
+        pass
+
 def _fetch_full_history_impl(ticker, period="3mo"):
     try:
-        data = _flatten_cols(yf.download(ticker, period=period, progress=False))
+        data = _flatten_cols(yf.download(ticker, period=period, progress=False, timeout=5))
         if data.empty:
             return None
         return data
@@ -698,7 +719,7 @@ def _get_top_movers_impl(tickers, max_batch=50):
     for i in range(0, len(tickers), max_batch):
         batch = tickers[i:i + max_batch]
         try:
-            data = yf.download(" ".join(batch), period="5d", progress=False)
+            data = yf.download(" ".join(batch), period="5d", progress=False, timeout=5)
             if data.empty:
                 continue
             close_df = data['Close']

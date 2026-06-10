@@ -11,7 +11,7 @@ from utils.storage import load_student_profile, save_student_profile, get_gcs_da
 from utils.market import (
     fetch_stock_market_data, fetch_full_history, get_dividends,
     CHART_PERIODS, STOCK_TICKERS, ETF_TICKERS, get_top_movers,
-    ALL_TICKERS, format_ticker_option,
+    ALL_TICKERS, format_ticker_option, warm_price_cache,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -90,6 +90,15 @@ def terms_page():
                 ui.label(f'• {item}').classes('text-gray-700 ml-4')
         ui.link('← Back to App', '/').classes('text-blue-600 mt-8')
 
+def get_dynamic_redirect_uri(request):
+    env_uri = os.environ.get("REDIRECT_URI")
+    if env_uri:
+        return env_uri
+    base_url = str(request.base_url)
+    if 'run.app' in base_url:
+        return base_url.replace('http://', 'https://').rstrip('/') + '/callback'
+    return "http://localhost:8080/callback"
+
 # ── Auth callback ────────────────────────────────────────
 @ui.page('/callback')
 def callback_page():
@@ -99,10 +108,8 @@ def callback_page():
         ui.link('Back to login', '/').classes('text-blue-600')
         return
     try:
-        base = str(ui.context.client.request.base_url).rstrip('/')\
-            .replace('http://', 'https://') if 'run.app' in str(ui.context.client.request.base_url)\
-            else str(ui.context.client.request.base_url).rstrip('/')
-        user_info = exchange_code(code, redirect_uri=base + '/callback')
+        redirect_uri = get_dynamic_redirect_uri(ui.context.client.request)
+        user_info = exchange_code(code, redirect_uri=redirect_uri)
         app.storage.user.update({
             'authenticated': True,
             'email': user_info['email'],
@@ -215,10 +222,8 @@ def _check_alerts(profile: dict):
 @ui.page('/')
 def main_page():
     if not app.storage.user.get('authenticated'):
-        base = str(ui.context.client.request.base_url).rstrip('/')\
-            .replace('http://', 'https://') if 'run.app' in str(ui.context.client.request.base_url)\
-            else str(ui.context.client.request.base_url).rstrip('/')
-        login_url = get_auth_url(redirect_uri=base + '/callback')
+        redirect_uri = get_dynamic_redirect_uri(ui.context.client.request)
+        login_url = get_auth_url(redirect_uri=redirect_uri)
         with ui.column().classes('items-center justify-center min-h-screen gap-6'):
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
@@ -241,6 +246,24 @@ def main_page():
         _save(email, profile)
     profile["name"] = name
     profile.setdefault("total_dividends_earned", 0.0)
+
+    # Warm price cache for all tickers in the class database in a single batch call
+    try:
+        db = get_gcs_database()
+        tickers_to_warm = set()
+        for t in profile.get('holdings', {}).keys():
+            tickers_to_warm.add(t)
+        for a in profile.get('alerts', []):
+            tickers_to_warm.add(a['ticker'])
+        if db:
+            for e, p in db.items():
+                for t in p.get('holdings', {}).keys():
+                    tickers_to_warm.add(t)
+        if tickers_to_warm:
+            warm_price_cache(list(tickers_to_warm))
+    except Exception as e:
+        logger.error(f"Error warming price cache: {e}")
+
     profile = _process_settlement(email, profile)
     deposit_amt, deposit_weeks = _process_weekly(email, profile)
     profile = _process_dividends(email, profile)
