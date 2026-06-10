@@ -29,13 +29,6 @@ def _save(email: str, profile: dict):
     _profiles[email] = profile
     save_student_profile(email, profile)
 
-# ── Head HTML (shared, loaded before any page) ────────────
-ui.add_head_html(
-    '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>'
-    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
-    shared=True,
-)
-
 # ── OAuth routes ─────────────────────────────────────────
 @app.get('/login')
 async def login_route():
@@ -112,8 +105,8 @@ def callback_page():
             'email': user_info['email'],
             'name': user_info.get('name', 'Student'),
         })
-        ui.label('✅ Authentication successful! Redirecting...').classes('text-green-500 text-xl')
-        ui.add_body_html('<script>setTimeout(function(){window.location.href="/"},500)</script>')
+        ui.label('✅ Authentication successful!').classes('text-green-500 text-xl')
+        ui.link('Go to Dashboard →', '/').classes('text-blue-600 text-lg')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         err_msg = str(e) or 'Unknown error'
@@ -250,6 +243,11 @@ def main_page():
 
     # ── UI ──
     ui.query('body').classes('bg-gray-50')
+    ui.add_head_html(
+        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>'
+        '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
+        shared=True,
+    )
 
     # Topbar
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
