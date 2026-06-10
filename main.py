@@ -214,7 +214,7 @@ def main_page():
             ui.label('📈').classes('text-6xl')
             ui.label('Math Finance Simulator').classes('text-3xl font-bold text-gray-800')
             ui.label('Classroom Stock Market Simulation').classes('text-gray-500 text-lg')
-            ui.button('Sign in with Google Workspace', on_click=lambda: ui.open(get_auth_url())
+            ui.button('Sign in with Google Workspace', on_click=lambda: ui.run_javascript('window.location.href="/login"')
                      ).props('size=xl').classes('bg-blue-600 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl')
             with ui.row().classes('gap-4 mt-8 text-sm text-gray-400'):
                 ui.link('Privacy Policy', '/privacy')
