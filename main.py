@@ -244,7 +244,8 @@ def main_page():
     # ── UI ──
     ui.query('body').classes('bg-gray-50')
     ui.add_head_html(
-        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>',
+        '<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>'
+        '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
         shared=True,
     )
 
@@ -252,10 +253,11 @@ def main_page():
     with ui.header().classes('bg-white/70 backdrop-blur-lg border-b border-gray-200'):
         with ui.row().classes('w-full items-center justify-between px-6 py-3'):
             ui.label('📈 Math Finance Simulator').classes('text-lg font-bold text-gray-800')
-            with ui.row().classes('items-center gap-1'):
-                ui.icon('account_circle').props('size=sm').classes('text-gray-500')
-                ui.label(f'{name}').classes('text-sm text-gray-600')
-                ui.label(f'({email})').classes('text-xs text-gray-400')
+            with ui.row().classes('items-center'):
+                ui.icon('account_circle').props('size=sm').classes('text-gray-500 q-mr-xs')
+                with ui.column().classes('gap-0'):
+                    ui.label(name).classes('text-sm text-gray-600')
+                    ui.label(email).classes('text-xs text-gray-400')
 
     # Summary bar
     @ui.refreshable
@@ -340,14 +342,14 @@ def main_page():
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().style('width:50%'): ui.plotly(fig).style('width:100%')
+                            ui.plotly(fig).classes('flex-1')
                         if sl:
                             fig = go.Figure(data=[go.Pie(labels=sl, values=sv, hole=0.4,
                                 marker=dict(colors=sc, line=dict(color='white', width=2)),
                                 textinfo='label+percent', textposition='auto', textfont=dict(size=10))])
                             fig.update_layout(height=240, margin=dict(l=0,r=0,t=0,b=0),
                                               showlegend=False, paper_bgcolor='rgba(0,0,0,0)')
-                            with ui.column().style('width:50%'): ui.plotly(fig).style('width:100%')
+                            ui.plotly(fig).classes('flex-1')
 
                 with ui.card().classes('w-full p-4 mt-4'):
                     ui.label('Positions').classes('font-bold text-lg mb-2')
@@ -380,7 +382,7 @@ def main_page():
         with ui.tab_panel(tt):
             pending = {'data': None}
             opts = {t: format_ticker_option(t) for t in ALL_TICKERS}
-            sel = ui.select(options=opts, label='Symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
+            sel = ui.select(options=opts, label='Search symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
 
             price_val = ui.label().classes('text-xl font-bold text-gray-900')
             price_sub = ui.label().classes('text-sm text-gray-500')
@@ -549,7 +551,7 @@ def main_page():
             with ui.row().classes('w-full gap-4'):
                 with ui.card().classes('w-1/3 p-4'):
                     ui.label('Volatility Calculator').classes('font-bold text-lg mb-3')
-                    vs = ui.select(options=opts, label='Symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
+                    vs = ui.select(options=opts, label='Search symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
                     vp = ui.select(options=CHART_PERIODS, value='3mo', label='Period').classes('w-full')
                     v_std = ui.label('—').classes('text-2xl font-bold')
                     v_range = ui.label('—').classes('text-2xl font-bold')
@@ -661,7 +663,7 @@ window.__tv.chart.timeScale().fitContent();
             with ui.card().classes('w-full p-4'):
                 ui.label('Price Alerts').classes('font-bold text-lg mb-2')
                 ui.label('Notify when a stock crosses a target price.').classes('text-sm text-gray-500 mb-3')
-                asel = ui.select(options=opts, label='Symbol', clearable=True).classes('w-56').props('use-input input-debounce=300')
+                asel = ui.select(options=opts, label='Search symbol', clearable=True).classes('w-56').props('use-input input-debounce=300')
                 adir = ui.select(options={'above': 'Above', 'below': 'Below'}, value='above').classes('w-32')
                 apr = ui.number(label='Target Price', value=200.0, min=0.01, step=1.0).classes('w-32')
 
@@ -783,6 +785,7 @@ body { background: #f8fafc; }
   .q-header .q-btn { font-size: 0.8rem; padding: 0.4rem 0.8rem; }
   .q-table { font-size: 0.75rem; }
 }
+.q-table td { vertical-align: middle; }
 """, shared=True)
 
 # ── Startup ──────────────────────────────────────────────
