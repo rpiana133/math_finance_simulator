@@ -112,8 +112,7 @@ def get_dynamic_redirect_uri(request):
 # ── Auth callback ────────────────────────────────────────
 @app.get('/callback')
 async def callback_route(code: str, request: Request):
-    base = str(request.base_url).replace('http://', 'https://').rstrip('/')
-    redirect_uri = base + '/callback'
+    redirect_uri = get_dynamic_redirect_uri(request)
     try:
         user_info = exchange_code(code, redirect_uri=redirect_uri)
         app.storage.user.update({
