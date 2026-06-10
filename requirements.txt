@@ -9,3 +9,4 @@ google-auth-oauthlib
 google-cloud-storage
 plotly
 cachetools
+urllib3<2

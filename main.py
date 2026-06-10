@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 # ── Shared head HTML (loaded before any page) ─────────────
 ui.add_head_html(
-    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">'
-    '<link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.2/iconfont/material-icons.css" rel="stylesheet">',
+    '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
     shared=True,
 )
 

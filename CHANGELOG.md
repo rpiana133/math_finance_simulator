@@ -3,9 +3,11 @@
 ## 2026-06-10
 
 ### Fixed
+- NaN close price: `_fetch_stock_market_data_impl` now uses `.dropna().iloc[-1]` instead of `.iloc[-1]`, so today's incomplete trading day (NaN) doesn't break all price fetches
+- urllib3 v2 / LibreSSL incompatibility: pinned `urllib3<2` in requirements.txt (macOS ships LibreSSL 2.8.3, urllib3 v2 requires OpenSSL 1.1.1+)
+- Removed cdnjs Material Icons fallback (was conflicting with Google Fonts CDN)
 - Removed `get_gcs_database()` call from page load warmup (was fetching ALL student profiles from GCS on every login, causing timeout)
 - `_fetch_stock_market_data_impl` now tries period fallbacks (5d → 1mo → 6mo) with 15s timeout instead of single 5d/5s attempt
-- Added cdnjs fallback for Material Icons font (fixes "arrow_drop_down", "chevron_left" text rendering)
 - Pie charts always render "Cash" slice even at $0 (empty positions no longer hides charts entirely)
 - Header name/email labels now truncate with ellipsis instead of overlapping the account icon
 - Replaced `@ui.page('/callback')` with FastAPI `@app.get('/callback')` to avoid WebSocket disconnect during OAuth exchange

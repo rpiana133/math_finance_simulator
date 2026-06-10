@@ -652,7 +652,6 @@ def get_dividends(ticker):
 
 def _fetch_stock_market_data_impl(ticker):
     try:
-        import math
         data = None
         for period in ("5d", "1mo", "6mo"):
             data = _flatten_cols(yf.download(ticker, period=period, progress=False, timeout=15))
@@ -660,9 +659,10 @@ def _fetch_stock_market_data_impl(ticker):
                 break
         if data is None or data.empty:
             return None, None, None
-        close_price = float(data['Close'].squeeze().iloc[-1])
-        if math.isnan(close_price):
+        close_series = data['Close'].squeeze().dropna()
+        if close_series.empty:
             return None, None, None
+        close_price = float(close_series.iloc[-1])
         company_name = get_company_name(ticker)
         return close_price, None, company_name
     except Exception:
