@@ -357,12 +357,12 @@ def main_page():
                         df['Return'] = df['Return'].map("{:+.2f}%".format)
                         t = ui.table.from_pandas(df).classes('w-full')
                         t.add_slot('body-cell-Value', '''
-                            <td class="text-right align-middle">
+                            <td style="text-align:right;vertical-align:middle">
                                 {{ props.row.Value }}
                             </td>
                         ''')
                         t.add_slot('body-cell-Return', '''
-                            <td :class="'text-right align-middle ' + (props.row.Return && props.row.Return.startsWith('-') ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold')">
+                            <td style="vertical-align:middle" :class="props.row.Return && props.row.Return.startsWith('-') ? 'text-red-500 font-semibold text-right' : 'text-green-600 font-semibold text-right'">
                                 {{ props.row.Return }}
                             </td>
                         ''')
