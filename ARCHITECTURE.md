@@ -18,10 +18,11 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 ├── main.py                  # App entry — routes, UI, all 5 tabs, teacher admin
 ├── requirements.txt         # Dependencies
 ├── Dockerfile               # Cloud Run container
+├── .dockerignore            # Excludes .git, venv, *.json from Docker image
 ├── ARCHITECTURE.md          # This file
 ├── utils/
 │   ├── auth.py              # OAuth URL generation, token exchange, teacher check
-│   ├── storage.py           # GCS CRUD: load/save profiles, get full database
+│   ├── storage.py           # GCS CRUD: load/save/delete profiles, get full database
 │   └── market.py            # yfinance wrappers: prices, history, dividends, top movers
 └── client_secret.json       # Google OAuth credentials (gitignored)
 ```
@@ -46,6 +47,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 - `load_student_profile(email)` → dict (cached in `_profiles` dict)
 - `save_student_profile(email, dict)` → writes to GCS + updates cache
 - `get_gcs_database()` → all student profiles (for standings/admin)
+- `delete_student_profile(email)` → removes a student profile from GCS (teacher admin)
 
 ## CSS Design System
 - **Inter font** via Google Fonts `@import` (body only — never `*` selector, which breaks Quasar components)
@@ -60,7 +62,8 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 - **Light theme only**, card-based layout, emoji over icon library
 - **`ui.add_css(shared=True)`** at module level — CSS injected once, not per-request
 - **`ui.add_head_html(shared=True)`** at module level for CDN scripts — never inside page functions (would accumulate duplicate `<script>` tags on every page load, breaking Vue/Quasar boot)
-- **Mutable dict pattern** replaces `nonlocal` in closures
+- **Mutable dict pattern** replaces `nonlocal` in closures (avoids name-resolution issues in some Python 3.9 runtimes)
+- **Standings tab and Teacher Admin are teacher-only** via `if is_teacher(email):` guards at tab creation, panel content, and lazy-loader timer
 - **All timers created at main-page level** (not inside refreshable functions or tab panels) to prevent "parent slot deleted" RuntimeError
 - **yfinance timeouts** set to 3s across all calls; errors silently caught
 
@@ -77,10 +80,10 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 |---|---|
 | Portfolio | Allocation pie chart, holdings pie chart, positions table, trade history |
 | Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers |
-| Research | Volatility calculator (std%, range, risk level), Price history (Lightweight Charts) |
+| Research | Volatility calculator (std%, range, risk level), Price history (Lightweight Charts v5.2) |
 | Alerts | Add/delete price alerts (above/below target) |
-| Standings | All students sorted by net worth (teacher excluded) |
-| Teacher Admin | Class Portfolio Data table + Sandbox JSON viewer (teacher only) |
+| Standings | All students sorted by net worth (teacher only) |
+| Teacher Admin | Class Portfolio Data table with Remove Student button + Sandbox JSON viewer (teacher only) |
 
 ## Market Data (utils/market.py)
 - **`fetch_stock_market_data(ticker)`** — live price + company name (cached 600s)
@@ -99,8 +102,8 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 | `_load_summary` | 0.1s (once) | Fetches portfolio data for summary bar |
 | `_load_portfolio` | 0.1s (once) | Fetches portfolio data for Portfolio tab |
 | `_load_movers` | 0.1s (once) | Fetches top gainers/losers for Market Movers (100-ticker batches) |
-| `_load_standings` | 0.1s (once) | Loads all profiles for Standings table |
-| `_load_admin` | 0.1s (once) | Loads all profiles for Teacher Admin table |
+| `_load_standings` | 0.1s (once) | Loads all profiles for Standings table (teacher only) |
+| `_load_admin` | 0.1s (once) | Loads all profiles for Teacher Admin table (teacher only) |
 | `_tick` | 300s (repeating) | Re-fetches data and refreshes all refreshable sections |
 
 All blocking callbacks (`_load_summary`, `_load_portfolio`, `_load_movers`, `_tick`) are `async` functions that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free.
@@ -108,15 +111,18 @@ All blocking callbacks (`_load_summary`, `_load_portfolio`, `_load_movers`, `_ti
 ## Refreshable Sections
 - `summary()` — top bar with cash balance, invested, unsettled, dividends, total
 - `portfolio_content()` — allocation charts, positions table, trade history
-- `standings_content()` — sorted standings table
-- `admin_table()` — teacher-only class portfolio data table
+- `standings_content()` — sorted standings table (teacher only)
+- `admin_table()` — class portfolio data table with Remove Student button (teacher only)
 - `movers()` — market movers gainers/losers lists (inside Trade tab)
 - `confirm_card()` — trade confirmation card (inside Trade tab)
 - `alert_list()` — alert list (inside Alerts tab)
 
-## Chart Initialization (Lightweight Charts)
+## Chart Initialization (Lightweight Charts v5.2)
 - CDN script loaded at module level via `ui.add_head_html(shared=True)` — never inside page functions
-- Chart JS polls via `setTimeout(initTv, 300)` until `LightweightCharts` global and `#tvchart` element exist
+- v5 API uses `c.addSeries(LightweightCharts.CandlestickSeries, opts)` instead of `c.addCandlestickSeries(opts)`
+- Series types passed as constructor references (`LightweightCharts.LineSeries`, `LightweightCharts.CandlestickSeries`) — not string literals
+- `ResizeObserver` on `#tvchart` element replaces polling for reliable resize when tab becomes visible
+- Chart JS retries via `setTimeout(initTv, 300)` until `LightweightCharts` global and `#tvchart` element exist
 - All `window.__tv.*` calls guarded with `if (window.__tv) return` / `if (!window.__tv)` null-checks
 - `ui.run_javascript` wrapped in try/catch with `console.error` fallback
 
@@ -132,14 +138,35 @@ python main.py  # → http://localhost:8080
 
 Note: `ui.run()` uses `reload=False` to avoid watchfiles interference during active development.
 
+OAuth requires both `client_secret.json` and `math-finance-simulator-51d674093aa1.json` in the project root (gitignored).
+
 ## Deployment
 ```bash
+# Build container image
 gcloud builds submit --tag gcr.io/math-finance-simulator/math-finance-simulator
+
+# Deploy (add --allow-unauthenticated for public access)
 gcloud run deploy math-finance-simulator \
   --image gcr.io/math-finance-simulator/math-finance-simulator \
-  --region us-east1 --platform managed --allow-unauthenticated
+  --region us-east1 --allow-unauthenticated
+
+# Set required environment variables
+gcloud run services update math-finance-simulator \
+  --region us-east1 --env-vars-file /tmp/env.json
 ```
+
+`/tmp/env.json` must contain these three variables:
+```json
+{
+  "STORAGE_SECRET": "hex-32-bytes",
+  "GOOGLE_CLIENT_SECRET": "{\"web\":{...}}",
+  "GCS_SERVICE_ACCOUNT": "{\"type\":\"service_account\",...}"
+}
+```
+
 OAuth redirect URIs must include both `http://localhost:8080/callback` and `https://*.run.app/callback` in Google Cloud Console.
+
+Note: `.dockerignore` excludes `*.json` from the Docker image — secrets are injected at runtime via env vars.
 
 ## Periodic Processes
 - **Every 5 min**: refresh summary, portfolio, standings, admin (via 300s async tick timer with thread-pool offload)
