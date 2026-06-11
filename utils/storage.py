@@ -127,6 +127,20 @@ def save_student_profile(email, profile):
         _profile_cache[email] = profile
 
 
+def _gcs_delete(path):
+    token = _gcs_token()
+    resp = requests.delete(
+        f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    resp.raise_for_status()
+
+def delete_student_profile(email):
+    global _profile_cache
+    _gcs_delete(f"{BLOB_PREFIX}{email}.json")
+    _profile_cache.pop(email, None)
+
+
 def get_gcs_database():
     names = _gcs_list(BLOB_PREFIX)
     db = {}
