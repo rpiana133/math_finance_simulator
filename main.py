@@ -2,6 +2,8 @@ import asyncio, json, os, logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+import yfinance as yf
+
 from nicegui import app, ui
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,10 +16,22 @@ from utils.market import (
     fetch_stock_market_data, get_dividends,
     CHART_PERIODS, STOCK_TICKERS, ETF_TICKERS, get_top_movers,
     ALL_TICKERS, format_ticker_option, warm_price_cache,
+    _flatten_cols,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ── Cent helpers ──────────────────────────────────────────
+def _cents(dollars: float) -> int:
+    return int(round(dollars * 100))
+
+def _fmt(cents: int) -> str:
+    sign = '-' if cents < 0 else ''
+    abs_c = abs(cents)
+    return f"{sign}${abs_c // 100:,}.{abs_c % 100:02d}"
+
+STARTING_CASH: int = 100000  # $1000.00 in cents
 
 # ── Fonts (Quasar needs Material Icons internally) ───────
 ui.add_head_html(
@@ -263,8 +277,8 @@ def terms_page():
 
 # ── Data helpers ─────────────────────────────────────────
 def _portfolio(profile: dict):
-    cash = profile.get("cash", 1000.0)
-    unsettled = profile.get("unsettled_cash", 0.0)
+    cash = profile.get("cash", STARTING_CASH) / 100.0
+    unsettled = profile.get("unsettled_cash", 0) / 100.0
     holdings = profile.get("holdings", {})
     history = profile.get("history", [])
     total_hold = total_cost = 0.0
@@ -274,14 +288,15 @@ def _portfolio(profile: dict):
         if price is not None and not __import__('math').isnan(price):
             cv = pos['shares'] * price
             total_hold += cv
-            total_cost += pos['total_cost']
-            avg = pos['total_cost'] / pos['shares']
+            tc = pos['total_cost'] / 100.0
+            total_cost += tc
+            avg = tc / pos['shares']
             ret = ((price - avg) / avg) * 100
             live.append({"Ticker": ticker, "Shares": round(pos['shares'], 4),
                          "Avg Price": f"${avg:.2f}", "Live Price": f"${price:.2f}",
                          "Value": f"${cv:.2f}", "Return": ret})
     total = cash + unsettled + total_hold
-    cap = 1000.0 + profile.get("total_deposits", 0.0)
+    cap = (STARTING_CASH + profile.get("total_deposits", 0)) / 100.0
     pl = total_hold - total_cost
     pl_pct = (pl / total_cost) * 100 if total_cost else 0.0
     return {"cash": cash, "unsettled": unsettled, "holdings": holdings,
@@ -291,7 +306,7 @@ def _portfolio(profile: dict):
 
 def _process_dividends(email: str, profile: dict):
     tracker = profile.setdefault("dividend_tracker", {}); now = datetime.now()
-    total = 0.0
+    total_c = 0
     for ticker, pos in list(profile.get("holdings", {}).items()):
         last = tracker.get(ticker)
         divs = get_dividends(ticker)
@@ -300,16 +315,16 @@ def _process_dividends(email: str, profile: dict):
         if last is None:
             tracker[ticker] = d.isoformat(); continue
         if d > datetime.fromisoformat(last):
-            a = pos['shares'] * amt
-            if a > 0:
-                profile["cash"] = round(profile["cash"] + a, 2)
-                profile["total_dividends_earned"] = round(profile.get("total_dividends_earned", 0.0) + a, 2)
+            a_c = _cents(pos['shares'] * amt)
+            if a_c > 0:
+                profile["cash"] += a_c
+                profile["total_dividends_earned"] = profile.get("total_dividends_earned", 0) + a_c
                 profile.setdefault("history", []).append({
                     "type": "dividend", "ticker": ticker, "shares": round(pos['shares'], 4),
-                    "dividend_per_share": round(amt, 4), "total": round(a, 2), "time": now.isoformat()})
-                total += a
+                    "dividend_per_share": round(amt, 4), "total": round(pos['shares'] * amt, 2), "time": now.isoformat()})
+                total_c += a_c
             tracker[ticker] = d.isoformat()
-    if total > 0: _save(email, profile)
+    if total_c > 0: _save(email, profile)
     return profile
 
 def _process_weekly(email: str, profile: dict):
@@ -317,12 +332,12 @@ def _process_weekly(email: str, profile: dict):
     if last:
         w = int((now - datetime.fromisoformat(last)).days / 7)
         if w >= 1:
-            a = w * 100
-            profile["cash"] = round(profile["cash"] + a, 2)
-            profile["total_deposits"] = round(profile.get("total_deposits", 0.0) + a, 2)
+            a_c = w * 10000  # $100/week in cents
+            profile["cash"] += a_c
+            profile["total_deposits"] = profile.get("total_deposits", 0) + a_c
             profile["last_weekly_deposit"] = now.isoformat()
             _save(email, profile)
-            return a, w
+            return a_c, w
     else:
         profile["last_weekly_deposit"] = now.isoformat()
         _save(email, profile)
@@ -330,16 +345,16 @@ def _process_weekly(email: str, profile: dict):
 
 def _process_settlement(email: str, profile: dict):
     now = datetime.now(); entries = profile.get("unsettled_entries", [])
-    settled = 0.0; remaining = []
+    settled_c = 0; remaining = []
     for e in entries:
         if (now - datetime.fromisoformat(e["time"])).total_seconds() >= 86400:
-            settled += e["amount"]
+            settled_c += e["amount"]
         else:
             remaining.append(e)
-    if settled > 0:
-        profile["cash"] = round(profile["cash"] + settled, 2)
+    if settled_c > 0:
+        profile["cash"] += settled_c
         profile["unsettled_entries"] = remaining
-        profile["unsettled_cash"] = round(sum(e["amount"] for e in remaining), 2)
+        profile["unsettled_cash"] = sum(e["amount"] for e in remaining)
         _save(email, profile)
     return profile
 
@@ -378,12 +393,12 @@ def main_page():
     name = app.storage.user.get('name', 'Student')
     profile = _get(email)
     if profile is None:
-        profile = {"name": name, "cash": 1000.0, "holdings": {}, "alerts": [], "history": [],
-                   "unsettled_cash": 0.0, "unsettled_entries": [], "dividend_tracker": {},
-                   "total_dividends_earned": 0.0}
+        profile = {"name": name, "cash": STARTING_CASH, "holdings": {}, "alerts": [], "history": [],
+                   "unsettled_cash": 0, "unsettled_entries": [], "dividend_tracker": {},
+                   "total_dividends_earned": 0}
         _save(email, profile)
     profile["name"] = name
-    profile.setdefault("total_dividends_earned", 0.0)
+    profile.setdefault("total_dividends_earned", 0)
 
     # Warm price cache for current user's holdings and alerts
     try:
@@ -426,7 +441,7 @@ def main_page():
             f'<div class="metric-box"><div class="label">Cash Balance</div><div class="value">${p["cash"]:,.2f}</div></div>'
             f'<div class="metric-box"><div class="label">Unsettled Cash</div><div class="value text-warning">${p["unsettled"]:,.2f}</div></div>'
             f'<div class="metric-box"><div class="label">Invested</div><div class="value">${p["total_hold"]:,.2f}</div><div class="sub {cls}">{pl_str}</div></div>'
-            f'<div class="metric-box"><div class="label">Dividends</div><div class="value text-positive">${profile.get("total_dividends_earned", 0.0):,.2f}</div></div>'
+            f'<div class="metric-box"><div class="label">Dividends</div><div class="value text-positive">{_fmt(profile.get("total_dividends_earned", 0))}</div></div>'
             f'<div class="metric-box"><div class="label">Total Account</div><div class="value">${p["total"]:,.2f}</div></div>'
         )
         ui.html(f'<div class="psummary">{items_html}</div>', sanitize=False)
@@ -440,7 +455,7 @@ def main_page():
 
     # Banners
     if deposit_amt:
-        ui.html(f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +${deposit_amt:.2f} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>')
+        ui.html(f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>')
     for msg in triggered:
         ui.html(f'<div class="banner banner-warning">\U0001f514 {msg}</div>')
 
@@ -581,7 +596,8 @@ def main_page():
                 pr, _, _ = fetch_stock_market_data(t)
                 if pr is None: preview.set_text(''); return
                 cost = (shares_in.value * pr) if mode.value == 'Shares' else amount_in.value
-                c_pct = (cost / profile['cash']) * 100 if profile['cash'] > 0 else 0
+                cost_c = _cents(cost)
+                c_pct = (cost_c / profile['cash']) * 100 if profile['cash'] > 0 else 0
                 p = _portfolio(profile)
                 if action.value == 'Buy':
                     ex = profile['holdings'].get(t, {}).get('shares', 0)
@@ -610,13 +626,14 @@ def main_page():
 
             def _exec(data):
                 t = data['ticker']
+                cost_c = _cents(data['cost'])
                 if data['action'] == 'Buy':
-                    profile['cash'] = round(profile['cash'] - data['cost'], 2)
+                    profile['cash'] -= cost_c
                     if t in profile['holdings']:
                         profile['holdings'][t]['shares'] += data['shares']
-                        profile['holdings'][t]['total_cost'] += data['cost']
+                        profile['holdings'][t]['total_cost'] += cost_c
                     else:
-                        profile['holdings'][t] = {'shares': data['shares'], 'total_cost': data['cost']}
+                        profile['holdings'][t] = {'shares': data['shares'], 'total_cost': cost_c}
                     profile.setdefault('history', []).append({
                         'type': 'Buy', 'ticker': t, 'shares': round(data['shares'], 4),
                         'price': round(data['price'], 2), 'total': round(data['cost'], 2),
@@ -624,15 +641,16 @@ def main_page():
                 else:
                     owned = profile['holdings'][t]['shares']
                     frac = data['shares'] / owned
-                    cb = frac * profile['holdings'][t]['total_cost']
-                    profit = data['cost'] - cb; tax = max(0, round(profit * 0.15, 2))
-                    net = data['cost'] - tax
-                    profile['unsettled_cash'] = round(profile.get('unsettled_cash', 0.0) + net, 2)
+                    cb = int(round(frac * profile['holdings'][t]['total_cost']))
+                    profit_c = cost_c - cb
+                    tax_c = max(0, int(round(profit_c * 0.15)))
+                    net_c = cost_c - tax_c
+                    profile['unsettled_cash'] = profile.get('unsettled_cash', 0) + net_c
                     profile.setdefault('unsettled_entries', []).append({
-                        'amount': net, 'time': datetime.now().isoformat()})
+                        'amount': net_c, 'time': datetime.now().isoformat()})
                     profile['holdings'][t]['shares'] -= data['shares']
                     profile['holdings'][t]['total_cost'] -= cb
-                    if profile['holdings'][t]['shares'] < 0.0001: del profile['holdings'][t]
+                    if profile['holdings'][t]['shares'] <= 0: del profile['holdings'][t]
                     profile.setdefault('history', []).append({
                         'type': 'Sell', 'ticker': t, 'shares': round(data['shares'], 4),
                         'price': round(data['price'], 2), 'total': round(data['cost'], 2),
@@ -653,11 +671,12 @@ def main_page():
                 pr, _, _ = fetch_stock_market_data(t)
                 if pr is None: ui.notify(f'Price unavailable for {t}', type='negative'); return
                 cost = (shares_in.value * pr) if mode.value == 'Shares' else amount_in.value
+                cost_c = _cents(cost)
                 sh = (shares_in.value if mode.value == 'Shares' else cost / pr)
                 a = action.value
                 err = None
-                if a == 'Buy' and cost > profile['cash']:
-                    err = f'Insufficient cash (${profile["cash"]:.2f} available, ${cost:.2f} needed)'
+                if a == 'Buy' and cost_c > profile['cash']:
+                    err = f'Insufficient cash ({_fmt(profile["cash"])} available, {_fmt(cost_c)} needed)'
                 elif a == 'Sell':
                     if t not in profile['holdings']: err = 'Not owned.'
                     else:
@@ -739,8 +758,6 @@ def main_page():
                     v_desc = ui.label('Pick a stock to calculate volatility.').classes('text-sm text-muted mt-2')
 
                     async def _vol_worker(t, period):
-                        import yfinance as yf
-                        from utils.market import _flatten_cols
                         try:
                             loop = asyncio.get_event_loop()
                             d = await loop.run_in_executor(
@@ -785,11 +802,12 @@ def main_page():
                     ui.html('<div id="tvchart" style="width:100%;height:380px;position:relative;overflow:hidden;box-sizing:border-box"></div>', sanitize=False)
 
                     ui.run_javascript('''
+var _tvt = Date.now();
 (function initTv() {
     try {
-        if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 300); return; }
+        if (typeof LightweightCharts === 'undefined') { if (Date.now() - _tvt < 10000) setTimeout(initTv, 100); return; }
         var el = document.getElementById('tvchart');
-        if (!el) { setTimeout(initTv, 300); return; }
+        if (!el) { if (Date.now() - _tvt < 10000) setTimeout(initTv, 100); return; }
         if (window.__tv && window.__tv.ready) return;
         var iw = el.clientWidth || 800, ih = el.clientHeight || 380;
         var c = LightweightCharts.createChart(el, {
@@ -819,12 +837,10 @@ def main_page():
             }).observe(el);
         }
         console.log('TV chart initialized', iw, 'x', ih);
-    } catch(e) { console.error('TV init error:', e); setTimeout(initTv, 300); }
+    } catch(e) { console.error('TV init error:', e); if (Date.now() - _tvt < 10000) setTimeout(initTv, 100); }
 })();''')
 
                     async def _chart_worker(t, period, style):
-                        import yfinance as yf
-                        from utils.market import _flatten_cols
                         try:
                             loop = asyncio.get_event_loop()
                             pr, _, company = await loop.run_in_executor(None, fetch_stock_market_data, t)
@@ -918,8 +934,9 @@ window.__tv.chart.timeScale().fitContent();
                             for t, pos in p.get('holdings', {}).items():
                                 pr, _, _ = fetch_stock_market_data(t)
                                 if pr is not None: mv += pos['shares'] * pr
-                            nw = p.get('cash', 1000.0) + mv
-                            rows.append({'Student': p.get('name', 'Student'), 'Net Worth': nw, 'Return': ((nw-1000)/1000)*100})
+                            cash = p.get('cash', STARTING_CASH)
+                            nw = (cash / 100) + mv
+                            rows.append({'Student': p.get('name', 'Student'), 'Net Worth': nw, 'Return': ((nw-(STARTING_CASH/100))/(STARTING_CASH/100))*100})
                         _standings_state['rows'] = rows
                         standings_content.refresh()
                     @ui.refreshable
@@ -959,11 +976,12 @@ window.__tv.chart.timeScale().fitContent();
                             for t, pos in p.get('holdings', {}).items():
                                 pr, _, _ = fetch_stock_market_data(t)
                                 if pr is not None: mv += pos['shares'] * pr
-                            nw = p.get('cash', 1000.0) + mv
-                            pl = nw - 1000.0
+                            cash = p.get('cash', STARTING_CASH)
+                            nw = (cash / 100) + mv
+                            pl = nw - (STARTING_CASH / 100)
                             rows.append({'Student': p.get('name', 'Unknown'), 'Email': e.split('@')[0],
-                                         'Net Worth': nw, 'P&L': pl, 'Return': (pl/1000)*100,
-                                         'Cash': p.get('cash', 1000.0), 'Stock Value': mv,
+                                         'Net Worth': nw, 'P&L': pl, 'Return': (pl / (STARTING_CASH / 100)) * 100,
+                                         'Cash': cash / 100, 'Stock Value': mv,
                                          'Trades': len(p.get('history', []))})
                         _admin_state['rows'] = rows
                         admin_table.refresh()
@@ -1008,7 +1026,7 @@ window.__tv.chart.timeScale().fitContent();
                     ui.label('Personal trading in main tabs, filtered from standings.').classes('text-sm text-muted')
                     ui.json_editor(properties={
                         'Name': profile.get('name'),
-                        'Cash': f"${profile.get('cash', 0.0):,.2f}",
+                        'Cash': _fmt(profile.get('cash', 0)),
                         'Holdings': {t: p['shares'] for t, p in profile.get('holdings', {}).items()},
                         'Trades': len(profile.get('history', []))
                     })
