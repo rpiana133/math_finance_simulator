@@ -59,7 +59,7 @@ def _fetch_macro() -> dict:
     if now.timestamp() - _MACRO_CACHE['ts'] < _MACRO_TTL and _MACRO_CACHE['data'] is not None:
         return _MACRO_CACHE['data']
     frd_to = now.strftime('%Y-%m-%d')
-    frd_from = now.replace(year=now.year-1, month=now.month-1 if now.month > 1 else 12).strftime('%Y-%m-%d')
+    frd_from = now.replace(year=now.year-2).strftime('%Y-%m-%d')
     def _vix():
         d = _flatten_cols(yf.download('^VIX', period='2y', progress=False, timeout=15))
         v = d['Close'].dropna()
