@@ -762,14 +762,12 @@ def main_page():
                 else:
                     if t in profile['holdings']:
                         o = profile['holdings'][t]['shares']
-                        rm = max(o - shares_in.value, 0) if mode.value == 'Shares' else max(o - cost / pr, 0)
-                        w = ((rm * pr) / p['total']) * 100 if p['total'] > 0 else 0
-                        preview.set_text(f'\u2248 {shares_in.value:.4f} shares  \u00b7  est. new weight {w:.1f}%')
-                        if mode.value == 'Shares' and shares_in.value > o + 0.0001:
-                            warn = f'\u26a0 Only {o:.4f} shares owned'
-                        elif mode.value == 'Amount ($)' and cost > o * pr + 0.01:
-                            warn = '\u26a0 Exceeds position value'
                         sh_selling = shares_in.value if mode.value == 'Shares' else cost / pr
+                        rm = max(o - sh_selling, 0)
+                        w = ((rm * pr) / p['total']) * 100 if p['total'] > 0 else 0
+                        preview.set_text(f'\u2248 {sh_selling:.4f} shares  \u00b7  est. new weight {w:.1f}%')
+                        if sh_selling > o + 0.0001:
+                            warn = f'\u26a0 Only {o:.4f} shares owned'
                         frac = sh_selling / o
                         cb_d = (frac * profile['holdings'][t]['total_cost']) / 100.0
                         profit_d = cost - cb_d
