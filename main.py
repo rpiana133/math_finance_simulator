@@ -696,6 +696,8 @@ def main_page():
                     sel.options = opts
                     sel.label = 'Search symbol'
                 sel.value = None
+                position_info.set_text('')
+                limit_warn.set_text('')
 
             action.on_value_change(_on_action_change)
             mode = ui.radio(['Shares', 'Amount ($)'], value='Shares').props('inline dense')
@@ -703,6 +705,8 @@ def main_page():
             amount_in = ui.number(label='Amount ($)', value=100.0, min=1.0, step=10.0).classes('w-full')
             amount_in.set_visibility(False)
             preview = ui.label().classes('text-sm text-muted mt-1')
+            position_info = ui.label().classes('text-sm text-muted mt-1')
+            limit_warn = ui.label().classes('text-sm text-negative mt-1')
 
             def _upd_sel():
                 t = sel.value
@@ -716,6 +720,14 @@ def main_page():
                         price_sub.set_text('')
                 else:
                     price_val.set_text(''); price_sub.set_text('')
+                if action.value == 'Sell' and t and t in profile.get('holdings', {}):
+                    pos = profile['holdings'][t]
+                    sh = pos['shares']
+                    avg = pos['total_cost'] / 100.0 / sh
+                    mv = sh * pr if pr else 0
+                    position_info.set_text(f'\U0001f4e6 Your position: {sh:.4f} shares @ ${avg:.2f} = ${mv:,.2f}')
+                else:
+                    position_info.set_text('')
 
             def _upd_mode():
                 s = mode.value == 'Shares'
@@ -724,22 +736,33 @@ def main_page():
 
             def _upd_preview():
                 t = sel.value
-                if not t: preview.set_text(''); return
+                if not t: preview.set_text(''); limit_warn.set_text(''); return
                 pr, _, _ = fetch_stock_market_data(t)
-                if pr is None: preview.set_text(''); return
+                if pr is None: preview.set_text(''); limit_warn.set_text(''); return
                 cost = (shares_in.value * pr) if mode.value == 'Shares' else amount_in.value
                 cost_c = _cents(cost)
                 c_pct = (cost_c / profile['cash']) * 100 if profile['cash'] > 0 else 0
                 p = _portfolio(profile)
+                warn = ''
                 if action.value == 'Buy':
                     ex = profile['holdings'].get(t, {}).get('shares', 0)
                     w = ((cost + (ex * pr)) / p['total']) * 100 if p['total'] > 0 else 0
                     preview.set_text(f'\u2248 ${cost:,.2f}  \u00b7  {c_pct:.1f}% of cash  \u00b7  est. weight {w:.1f}%')
+                    if cost_c > profile['cash']:
+                        warn = f'\u26a0 Insufficient cash ({_fmt(profile["cash"])} available, {_fmt(cost_c)} needed)'
                 else:
                     if t in profile['holdings']:
-                        rm = max(profile['holdings'][t]['shares'] - shares_in.value, 0)
+                        o = profile['holdings'][t]['shares']
+                        rm = max(o - shares_in.value, 0) if mode.value == 'Shares' else max(o - cost / pr, 0)
                         w = ((rm * pr) / p['total']) * 100 if p['total'] > 0 else 0
                         preview.set_text(f'\u2248 {shares_in.value:.4f} shares  \u00b7  est. new weight {w:.1f}%')
+                        if mode.value == 'Shares' and shares_in.value > o + 0.0001:
+                            warn = f'\u26a0 Only {o:.4f} shares owned'
+                        elif mode.value == 'Amount ($)' and cost > o * pr + 0.01:
+                            warn = '\u26a0 Exceeds position value'
+                    else:
+                        preview.set_text('')
+                limit_warn.set_text(warn)
 
             sel.on_value_change(lambda: _upd_sel()); sel.on_value_change(lambda: _upd_preview())
             action.on_value_change(lambda: _upd_preview()); mode.on_value_change(lambda: _upd_preview())
