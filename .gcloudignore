@@ -1,0 +1,15 @@
+.gcloudignore
+.git/
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env.yaml
+.env
+.nicegui/
+assets/
+*.md
+*.txt
+*.json
