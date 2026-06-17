@@ -178,9 +178,22 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 # ── Profile cache ────────────────────────────────────────
 _profiles: dict = {}
 
+def _migrate_profile(p: dict) -> dict:
+    if isinstance(p.get("cash"), int):
+        return p
+    p["cash"] = int(round(p.get("cash", 0) * 100))
+    p["unsettled_cash"] = int(round(p.get("unsettled_cash", 0) * 100))
+    p["total_dividends_earned"] = int(round(p.get("total_dividends_earned", 0) * 100))
+    p["total_deposits"] = int(round(p.get("total_deposits", 0) * 100))
+    for h in p.get("holdings", {}).values():
+        h["total_cost"] = int(round(h.get("total_cost", 0) * 100))
+    for e in p.get("unsettled_entries", []):
+        e["amount"] = int(round(e.get("amount", 0) * 100))
+    return p
+
 def _get(email: str):
     if email not in _profiles:
-        _profiles[email] = load_student_profile(email)
+        _profiles[email] = _migrate_profile(load_student_profile(email))
     return _profiles[email]
 
 def _save(email: str, profile: dict):
@@ -931,6 +944,7 @@ window.__tv.chart.timeScale().fitContent();
                         rows = []
                         for e, p in db.items():
                             if e == 'rpiana@stjohnsguam.com': continue
+                            p = _migrate_profile(p)
                             mv = 0.0
                             for t, pos in p.get('holdings', {}).items():
                                 pr, _, _ = fetch_stock_market_data(t)
@@ -973,6 +987,7 @@ window.__tv.chart.timeScale().fitContent();
                         rows = []
                         for e, p in db.items():
                             if e == 'rpiana@stjohnsguam.com': continue
+                            p = _migrate_profile(p)
                             mv = 0.0
                             for t, pos in p.get('holdings', {}).items():
                                 pr, _, _ = fetch_stock_market_data(t)
