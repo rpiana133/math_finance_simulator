@@ -466,6 +466,10 @@ def main_page():
         for t in profile.get('holdings', {}).keys(): tickers_to_warm.add(t)
         for a in profile.get('alerts', []): tickers_to_warm.add(a['ticker'])
         if tickers_to_warm: warm_price_cache(list(tickers_to_warm))
+        # Pre-fill market movers 30-min cache so the movers section loads instantly
+        executor = ThreadPoolExecutor(max_workers=1)
+        executor.submit(get_top_movers, list(ALL_TICKERS))
+        executor.shutdown(wait=False)
     except Exception as e:
         logger.error(f"Error warming price cache: {e}")
 

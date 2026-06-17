@@ -549,6 +549,9 @@ POPULAR_STOCKS = {
     "SPCX": "SpaceX",
     "ASTS": "AST SpaceMobile",
     "GTLB": "GitLab",
+    "BTC-USD": "Bitcoin",
+    "ETH-USD": "Ethereum",
+    "SOL-USD": "Solana",
 }
 
 POPULAR_ETFS = {
