@@ -48,6 +48,8 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 - Each student has a **profile dict** in GCS at `students/{email}.json`
 - Fields: `name`, `cash`, `holdings`, `history`, `alerts`, `unsettled_cash`, `dividend_tracker`, etc.
 - All monetary values stored as **integer cents** — converted at read boundary via `_portfolio()` `/ 100.0`
+- Holding price lookups in `_portfolio()` parallelized via `ThreadPoolExecutor` (up to 8 workers)
+- Standings/admin loaders batch all unique tickers across students and fetch prices in parallel, then use a `price_map` dict for O(1) lookups — eliminating N×M sequential yfinance calls
 - `load_student_profile(email)` → dict (cached in `_profiles` dict, auto-migrated via `_migrate_profile()`)
 - `save_student_profile(email, dict)` → writes to GCS + updates cache
 - `get_gcs_database()` → all student profiles (for standings/admin)
@@ -110,7 +112,7 @@ All calls wrapped with `TTLCache`; errors caught and silently handled.
 | PCE | `PCEPI` | FRED CSV (free) | YoY % via `(latest / 12mo_ago - 1) * 100` |
 | DXY | `DX-Y.NYB` | yfinance | Raw index + 1-month % change |
 
-FRED data fetched via `fred.stlouisfed.org/graph/fredgraph.csv?id={series}` — no API key required. All async on page load, refreshes every 5 minutes.
+FRED data fetched via `fred.stlouisfed.org/graph/fredgraph.csv?id={series}` — no API key required. All 5 macro sources are fetched concurrently via `ThreadPoolExecutor(max_workers=5)`. Results are cached in `_MACRO_CACHE` (module-level dict, 290s TTL) so redundant fetches across users are eliminated. Async on page load, refreshes every 5 minutes.
 
 ## Finnhub News
 - Lazy client init (`_fh()`) reads `FINNHUB_API_KEY` from env
@@ -131,7 +133,10 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 | `_load_admin` | 0.1s (once) | Loads all profiles for Teacher Admin table (teacher only) |
 | `_tick` | 300s (repeating) | Re-fetches data and refreshes all refreshable sections |
 
-All blocking callbacks are `async` functions that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free.
+All blocking callbacks are `async` functions that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. Internal parallelism:
+
+- `_fetch_macro()` uses `ThreadPoolExecutor(max_workers=5)` to fetch VIX, 3 FRED series, and DXY **concurrently** instead of sequentially. Results cached globally (`_MACRO_CACHE`, 290s TTL) so concurrent page loads share one fetch.
+- `_load_standings()` and `_load_admin()` batch all unique tickers across all student profiles, fetch prices in parallel, then use a `price_map` dict for O(1) lookups — eliminating N×M sequential yfinance calls.
 
 ## Refreshable Sections
 - `summary()` — top bar with cash balance, invested, unsettled, dividends, total

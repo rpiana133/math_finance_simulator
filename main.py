@@ -52,37 +52,52 @@ def _relative_time(ts: int) -> str:
     if diff < 604800: return f"{diff // 86400}d ago"
     return datetime.fromtimestamp(ts).strftime("%b %d")
 
+_MACRO_CACHE = {'ts': 0, 'data': None}
+_MACRO_TTL = 290
 def _fetch_macro() -> dict:
-    result = {}
     now = datetime.now()
-    frd_from = now.replace(year=now.year-2).strftime('%Y-%m-%d')
+    if now.timestamp() - _MACRO_CACHE['ts'] < _MACRO_TTL and _MACRO_CACHE['data'] is not None:
+        return _MACRO_CACHE['data']
     frd_to = now.strftime('%Y-%m-%d')
-    try:
+    frd_from = now.replace(year=now.year-1, month=now.month-1 if now.month > 1 else 12).strftime('%Y-%m-%d')
+    def _vix():
         d = _flatten_cols(yf.download('^VIX', period='2y', progress=False, timeout=15))
         v = d['Close'].dropna()
         if not v.empty:
-            vv = v.iloc[-1]; result['vix'] = f'{vv:.2f}'
-            result['vix_color'] = 'positive' if vv < 15 else 'warning' if vv < 25 else 'negative'
-    except: result['vix'] = 'N/A'; result['vix_color'] = ''
-    for key, series in [('cpi', 'CPIAUCNS'), ('ppi', 'PPIACO'), ('pce', 'PCEPI')]:
+            vv = v.iloc[-1]
+            return 'vix', f'{vv:.2f}', 'vix_color', ('positive' if vv < 15 else 'warning' if vv < 25 else 'negative')
+        return 'vix', 'N/A', 'vix_color', ''
+    def _dxy():
+        d = _flatten_cols(yf.download('DX-Y.NYB', period='1mo', progress=False, timeout=15))
+        s = d['Close'].dropna()
+        if not s.empty:
+            dv = s.iloc[-1]; chg = ((dv / s.iloc[0]) - 1) * 100
+            return 'dxy', f'{dv:.2f}', 'dxy_chg', f'{chg:+.1f}%'
+        return 'dxy', 'N/A', 'dxy_chg', ''
+    def _fred(key, series):
         try:
             r = requests.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={frd_from}&coed={frd_to}', timeout=10)
             df = pd.read_csv(io.StringIO(r.text))
             vals = df.iloc[:, 1].dropna()
             if len(vals) >= 13:
                 yoy = ((vals.iloc[-1] / vals.iloc[-13]) - 1) * 100
-                result[key] = f'{yoy:+.1f}%'
-                result[f'{key}_color'] = 'positive' if yoy < 0 else 'negative'
-            else: result[key] = 'N/A'; result[f'{key}_color'] = ''
-        except: result[key] = 'N/A'; result[f'{key}_color'] = ''
-    try:
-        d = _flatten_cols(yf.download('DX-Y.NYB', period='1mo', progress=False, timeout=15))
-        s = d['Close'].dropna()
-        if not s.empty:
-            dv = s.iloc[-1]; chg = ((dv / s.iloc[0]) - 1) * 100
-            result['dxy'] = f'{dv:.2f}'; result['dxy_chg'] = f'{chg:+.1f}%'
-        else: result['dxy'] = 'N/A'; result['dxy_chg'] = ''
-    except: result['dxy'] = 'N/A'; result['dxy_chg'] = ''
+                return key, f'{yoy:+.1f}%', f'{key}_color', ('positive' if yoy < 0 else 'negative')
+            return key, 'N/A', f'{key}_color', ''
+        except: return key, 'N/A', f'{key}_color', ''
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futs = [ex.submit(_vix), ex.submit(_dxy)]
+        futs += [ex.submit(_fred, k, s) for k, s in [('cpi', 'CPIAUCNS'), ('ppi', 'PPIACO'), ('pce', 'PCEPI')]]
+    result = {}
+    for f in futs:
+        try:
+            r = f.result()
+            if r[0] == 'dxy':
+                result['dxy'] = r[1]; result['dxy_chg'] = r[3]
+            else:
+                result[r[0]] = r[1]; result[r[2]] = r[3]
+        except: pass
+    _MACRO_CACHE['ts'] = now.timestamp()
+    _MACRO_CACHE['data'] = result
     return result
 
 # ── Fonts (Quasar needs Material Icons internally) ───────
@@ -352,18 +367,21 @@ def _portfolio(profile: dict):
     history = profile.get("history", [])
     total_hold = total_cost = 0.0
     live = []
-    for ticker, pos in list(holdings.items()):
-        price, _, _ = fetch_stock_market_data(ticker)
-        if price is not None and not __import__('math').isnan(price):
-            cv = pos['shares'] * price
-            total_hold += cv
-            tc = pos['total_cost'] / 100.0
-            total_cost += tc
-            avg = tc / pos['shares']
-            ret = ((price - avg) / avg) * 100
-            live.append({"Ticker": ticker, "Shares": round(pos['shares'], 4),
-                         "Avg Price": f"${avg:.2f}", "Live Price": f"${price:.2f}",
-                         "Value": f"${cv:.2f}", "Return": ret})
+    hold_items = list(holdings.items())
+    if hold_items:
+        with ThreadPoolExecutor(max_workers=min(8, len(hold_items))) as ex:
+            prices = list(ex.map(lambda t: fetch_stock_market_data(t[0]), hold_items))
+        for (ticker, pos), (price, _, _) in zip(hold_items, prices):
+            if price is not None and not __import__('math').isnan(price):
+                cv = pos['shares'] * price
+                total_hold += cv
+                tc = pos['total_cost'] / 100.0
+                total_cost += tc
+                avg = tc / pos['shares']
+                ret = ((price - avg) / avg) * 100
+                live.append({"Ticker": ticker, "Shares": round(pos['shares'], 4),
+                             "Avg Price": f"${avg:.2f}", "Live Price": f"${price:.2f}",
+                             "Value": f"${cv:.2f}", "Return": ret})
     total = cash + unsettled + total_hold
     cap = (STARTING_CASH + profile.get("total_deposits", 0)) / 100.0
     pl = total_hold - total_cost
@@ -1092,13 +1110,24 @@ window.__tv.chart.timeScale().fitContent();
                     def _load_standings():
                         db = get_gcs_database()
                         if not db: _standings_state['rows'] = []; standings_content.refresh(); return
+                        db.pop('rpiana@stjohnsguam.com', None)
+                        all_tickers = set()
+                        for p in db.values():
+                            p = _migrate_profile(p)
+                            all_tickers.update(p.get('holdings', {}).keys())
+                        price_map = {}
+                        if all_tickers:
+                            tl = list(all_tickers)
+                            with ThreadPoolExecutor(max_workers=min(8, len(tl))) as ex:
+                                res = list(ex.map(lambda t: (t, fetch_stock_market_data(t)[0]), tl))
+                            for t, pr in res:
+                                if pr is not None: price_map[t] = pr
                         rows = []
                         for e, p in db.items():
-                            if e == 'rpiana@stjohnsguam.com': continue
                             p = _migrate_profile(p)
                             mv = 0.0
                             for t, pos in p.get('holdings', {}).items():
-                                pr, _, _ = fetch_stock_market_data(t)
+                                pr = price_map.get(t)
                                 if pr is not None: mv += pos['shares'] * pr
                             cash = p.get('cash', STARTING_CASH)
                             nw = (cash / 100) + mv
@@ -1135,13 +1164,24 @@ window.__tv.chart.timeScale().fitContent();
                     def _load_admin():
                         db = get_gcs_database()
                         if not db: _admin_state['rows'] = []; admin_table.refresh(); return
+                        db.pop('rpiana@stjohnsguam.com', None)
+                        all_tickers = set()
+                        for p in db.values():
+                            p = _migrate_profile(p)
+                            all_tickers.update(p.get('holdings', {}).keys())
+                        price_map = {}
+                        if all_tickers:
+                            tl = list(all_tickers)
+                            with ThreadPoolExecutor(max_workers=min(8, len(tl))) as ex:
+                                res = list(ex.map(lambda t: (t, fetch_stock_market_data(t)[0]), tl))
+                            for t, pr in res:
+                                if pr is not None: price_map[t] = pr
                         rows = []
                         for e, p in db.items():
-                            if e == 'rpiana@stjohnsguam.com': continue
                             p = _migrate_profile(p)
                             mv = 0.0
                             for t, pos in p.get('holdings', {}).items():
-                                pr, _, _ = fetch_stock_market_data(t)
+                                pr = price_map.get(t)
                                 if pr is not None: mv += pos['shares'] * pr
                             cash = p.get('cash', STARTING_CASH)
                             nw = (cash / 100) + mv
