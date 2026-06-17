@@ -308,6 +308,8 @@ def privacy_page():
                     'Google Workspace (authentication only)',
                     'Google Cloud Storage (data persistence)',
                     'Yahoo Finance via yfinance (stock price data)',
+                    'Finnhub (stock news and company data)',
+                    'Federal Reserve Economic Data / FRED (CPI, PPI, PCE indicators)',
                 ]),
             ]:
                 ui.label(title).classes('text-lg font-semibold mt-4')
@@ -328,6 +330,8 @@ def terms_page():
                 ('Acceptance', ['Educational simulation for classroom use only.']),
                 ('Educational Purpose Only', [
                     'Simulation using delayed data from Yahoo Finance.',
+                    'Stock news provided by Finnhub.',
+                    'Macroeconomic indicators (CPI, PPI, PCE) provided by FRED.',
                     'All trades are fictional \u2014 no real money is involved.',
                 ]),
                 ('User Responsibilities', [
