@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 def _cents(dollars: float) -> int:
     return int(round(dollars * 100))
 
-def _fmt(cents: int) -> str:
+def _fmt(cents) -> str:
+    cents = int(cents)
     sign = '-' if cents < 0 else ''
     abs_c = abs(cents)
     return f"{sign}${abs_c // 100:,}.{abs_c % 100:02d}"
