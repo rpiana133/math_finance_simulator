@@ -689,7 +689,7 @@ def main_page():
             opts = {t: format_ticker_option(t) for t in ALL_TICKERS}
             sel = ui.select(options=opts, label='Search symbol', clearable=True).classes('w-full').props('use-input input-debounce=300')
             price_val = ui.label().classes('text-xl font-bold')
-            price_sub = ui.label().classes('text-sm text-muted')
+            price_sub = ui.html().classes('text-sm text-muted')
             action = ui.radio(['Buy', 'Sell'], value='Buy').props('inline dense').classes('mt-1')
 
             def _on_action_change():
@@ -722,13 +722,13 @@ def main_page():
                     if pr is not None:
                         price_val.set_text(f'${pr:.2f}')
                         src = get_price_source(t)
-                        src_tag = '  \u25cf Live' if src == 'live' else '  (prior close)' if src == 'close' else ''
-                        price_sub.set_text(f'{company}{src_tag}')
+                        src_html = ' <span style="color:#ef4444">\u25cf Live</span>' if src == 'live' else ('  (prior close)' if src == 'close' else '')
+                        price_sub.set_content(f'{company}{src_html}')
                     else:
                         price_val.set_text('Price unavailable')
-                        price_sub.set_text('')
+                        price_sub.set_content('')
                 else:
-                    price_val.set_text(''); price_sub.set_text('')
+                    price_val.set_text(''); price_sub.set_content('')
                 if action.value == 'Sell' and t and t in profile.get('holdings', {}):
                     pos = profile['holdings'][t]
                     sh = pos['shares']
