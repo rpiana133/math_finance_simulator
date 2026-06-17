@@ -86,7 +86,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 |---|---|
 | _(inline)_ | **Macro Indicators** — VIX, CPI (YoY), PPI (YoY), PCE (YoY), DXY — always visible above tabs |
 | Portfolio | Allocation pie chart, holdings pie chart, positions table, trade history |
-| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers |
+| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers. **Sell mode** filters dropdown to only show owned stocks, label changes to "Your holdings" |
 | Research | Volatility calculator (std%, range, risk level), Price history (Lightweight Charts v5.2), Finnhub news |
 | Alerts | Add/delete price alerts (above/below target) |
 | Standings | All students sorted by net worth (teacher only) |
@@ -101,16 +101,16 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 
 All calls wrapped with `TTLCache`; errors caught and silently handled.
 
-## Macro Indicators (via yfinance)
-| Indicator | Ticker | Calculation |
-|---|---|---|
-| VIX | `^VIX` | Raw index value; green <15, yellow 15-25, red >25 |
-| CPI | `CPIAUCNS` | YoY % via `(latest / 1yr_ago - 1) * 100` |
-| PPI | `PPIACO` | YoY % via `(latest / 1yr_ago - 1) * 100` |
-| PCE | `PCEPI` | YoY % via `(latest / 1yr_ago - 1) * 100` |
-| DXY | `DX-Y.NYB` | Raw index + 1-month % change |
+## Macro Indicators
+| Indicator | Ticker | Source | Calculation |
+|---|---|---|---|
+| VIX | `^VIX` | yfinance | Raw index value; green <15, yellow 15-25, red >25 |
+| CPI | `CPIAUCNS` | FRED CSV (free) | YoY % via `(latest / 12mo_ago - 1) * 100` |
+| PPI | `PPIACO` | FRED CSV (free) | YoY % via `(latest / 12mo_ago - 1) * 100` |
+| PCE | `PCEPI` | FRED CSV (free) | YoY % via `(latest / 12mo_ago - 1) * 100` |
+| DXY | `DX-Y.NYB` | yfinance | Raw index + 1-month % change |
 
-Fetched asynchronously on page load, refreshes every 5 minutes.
+FRED data fetched via `fred.stlouisfed.org/graph/fredgraph.csv?id={series}` — no API key required. All async on page load, refreshes every 5 minutes.
 
 ## Finnhub News
 - Lazy client init (`_fh()`) reads `FINNHUB_API_KEY` from env
