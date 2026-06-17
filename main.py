@@ -51,6 +51,35 @@ def _relative_time(ts: int) -> str:
     if diff < 604800: return f"{diff // 86400}d ago"
     return datetime.fromtimestamp(ts).strftime("%b %d")
 
+def _fetch_macro() -> dict:
+    result = {}
+    try:
+        d = _flatten_cols(yf.download('^VIX', period='2y', progress=False, timeout=15))
+        v = d['Close'].dropna()
+        if not v.empty:
+            vv = v.iloc[-1]; result['vix'] = f'{vv:.2f}'
+            result['vix_color'] = 'positive' if vv < 15 else 'warning' if vv < 25 else 'negative'
+    except: result['vix'] = 'N/A'; result['vix_color'] = ''
+    for key, ticker in [('cpi', 'CPIAUCNS'), ('ppi', 'PPIACO'), ('pce', 'PCEPI')]:
+        try:
+            d = _flatten_cols(yf.download(ticker, period='1y', progress=False, timeout=15))
+            s = d['Close'].dropna()
+            if len(s) >= 2:
+                yoy = ((s.iloc[-1] / s.iloc[0]) - 1) * 100
+                result[key] = f'{yoy:+.1f}%'
+                result[f'{key}_color'] = 'positive' if yoy < 0 else 'negative'
+            else: result[key] = 'N/A'; result[f'{key}_color'] = ''
+        except: result[key] = 'N/A'; result[f'{key}_color'] = ''
+    try:
+        d = _flatten_cols(yf.download('DX-Y.NYB', period='1mo', progress=False, timeout=15))
+        s = d['Close'].dropna()
+        if not s.empty:
+            dv = s.iloc[-1]; chg = ((dv / s.iloc[0]) - 1) * 100
+            result['dxy'] = f'{dv:.2f}'; result['dxy_chg'] = f'{chg:+.1f}%'
+        else: result['dxy'] = 'N/A'; result['dxy_chg'] = ''
+    except: result['dxy'] = 'N/A'; result['dxy_chg'] = ''
+    return result
+
 # ── Fonts (Quasar needs Material Icons internally) ───────
 ui.add_head_html(
     '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
@@ -489,6 +518,35 @@ def main_page():
         ui.html(f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>')
     for msg in triggered:
         ui.html(f'<div class="banner banner-warning">\U0001f514 {msg}</div>')
+
+    # ── Macro Indicators ──
+    _macro_state: dict = {'data': None}
+    @ui.refreshable
+    def macro_bar():
+        d = _macro_state['data']
+        if d is None:
+            ui.html('<div class="psummary"><div class="metric-box">Loading macro data...</div></div>', sanitize=False)
+            return
+        items = ''
+        for label, val_key, color_key, sub in [
+            ('VIX', 'vix', 'vix_color', 'Market fear gauge (<15 calm, >25 panic)'),
+            ('CPI', 'cpi', 'cpi_color', 'Consumer inflation, year-over-year'),
+            ('PPI', 'ppi', 'ppi_color', 'Producer input costs, year-over-year'),
+            ('PCE', 'pce', 'pce_color', "Fed's preferred inflation gauge, YoY"),
+            ('DXY', 'dxy', None, f"US Dollar vs majors ({d.get('dxy_chg', '')} 1mo)"),
+        ]:
+            val = d.get(val_key, 'N/A')
+            cls = f'text-{d.get(color_key)}' if color_key else ''
+            items += f'<div class="metric-box"><div class="label">{label}</div><div class="value {cls}">{val}</div><div class="sub">{sub}</div></div>'
+        ui.html(f'<div class="psummary" style="margin-top:0">{items}</div>', sanitize=False)
+    macro_bar()
+
+    async def _macro_worker():
+        loop = asyncio.get_event_loop()
+        _macro_state['data'] = await loop.run_in_executor(None, _fetch_macro)
+        macro_bar.refresh()
+    ui.timer(0.1, _macro_worker, once=True)
+    ui.timer(300, lambda: _macro_worker(), once=True)
 
     # ── Tabs ──
     with ui.tabs() as tabs:
