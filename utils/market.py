@@ -545,7 +545,10 @@ POPULAR_STOCKS = {
     "TSM": "TSMC ADR",
     "UA": "Under Armour (Class C)",
     "UAA": "Under Armour (Class A)",
-    "UL": "Unilever ADR"
+    "UL": "Unilever ADR",
+    "SPCX": "SpaceX",
+    "ASTS": "AST SpaceMobile",
+    "GTLB": "GitLab",
 }
 
 POPULAR_ETFS = {
