@@ -836,6 +836,8 @@ def main_page():
                         'cost_basis': round(cb / 100.0, 2), 'tax': round(tax_c / 100.0, 2),
                         'time': datetime.now().strftime('%Y-%m-%d %H:%M')})
                 _save(email, profile)
+                _summary_state['data'] = _portfolio(profile)
+                _portfolio_state['data'] = _summary_state['data']
                 pending['data'] = None
                 confirm_card.refresh()
                 summary.refresh(); portfolio_content.refresh()
