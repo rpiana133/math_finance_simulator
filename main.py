@@ -730,9 +730,9 @@ def main_page():
                 if action.value == 'Sell' and t and t in profile.get('holdings', {}):
                     pos = profile['holdings'][t]
                     sh = pos['shares']
-                    avg = pos['total_cost'] / 100.0 / sh
+                    cb_total = pos['total_cost'] / 100.0
                     mv = sh * pr if pr else 0
-                    position_info.set_text(f'\U0001f4e6 Your position: {sh:.4f} shares @ ${avg:.2f} = ${mv:,.2f}')
+                    position_info.set_text(f'\U0001f4e6 Position: {sh:.4f} shares \u00b7 Cost basis: ${cb_total:,.2f} \u00b7 Market value: ${mv:,.2f}')
                 else:
                     position_info.set_text('')
                 tax_info.set_text('')
