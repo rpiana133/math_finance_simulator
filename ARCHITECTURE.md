@@ -88,7 +88,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 |---|---|
 | _(inline)_ | **Macro Indicators** — VIX, CPI (YoY), PPI (YoY), PCE (YoY), DXY — always visible above tabs |
 | Portfolio | Allocation pie chart, holdings pie chart, positions table, trade history |
-| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers. **Sell mode** filters dropdown to only show owned stocks, label changes to "Your holdings" |
+| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers. **Sell mode** filters dropdown to owned stocks, shows position info (`📦 Your position: N shares @ $AVG = $VALUE`), and real-time over-limit warnings (`⚠` in red) for insufficient cash (Buy) or exceeding owned shares/value (Sell) |
 | Research | Volatility calculator (std%, range, risk level), Price history (Lightweight Charts v5.2), Finnhub news |
 | Alerts | Add/delete price alerts (above/below target) |
 | Standings | All students sorted by net worth (teacher only) |
