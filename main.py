@@ -18,7 +18,7 @@ from utils.market import (
     fetch_stock_market_data, get_dividends,
     CHART_PERIODS, STOCK_TICKERS, ETF_TICKERS, get_top_movers,
     ALL_TICKERS, format_ticker_option, warm_price_cache,
-    _flatten_cols,
+    _flatten_cols, get_price_source,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -721,7 +721,9 @@ def main_page():
                     pr, _, company = fetch_stock_market_data(t)
                     if pr is not None:
                         price_val.set_text(f'${pr:.2f}')
-                        price_sub.set_text(company)
+                        src = get_price_source(t)
+                        src_tag = '  \u25cf Live' if src == 'live' else '  (prior close)' if src == 'close' else ''
+                        price_sub.set_text(f'{company}{src_tag}')
                     else:
                         price_val.set_text('Price unavailable')
                         price_sub.set_text('')
@@ -763,9 +765,7 @@ def main_page():
                     if t in profile['holdings']:
                         o = profile['holdings'][t]['shares']
                         sh_selling = shares_in.value if mode.value == 'Shares' else cost / pr
-                        rm = max(o - sh_selling, 0)
-                        w = ((rm * pr) / p['total']) * 100 if p['total'] > 0 else 0
-                        preview.set_text(f'\u2248 {sh_selling:.4f} shares  \u00b7  est. new weight {w:.1f}%')
+                        preview.set_text(f'\u2248 {sh_selling:.4f} shares')
                         if sh_selling > o + 0.0001:
                             warn = f'\u26a0 Only {o:.4f} shares owned'
                         frac = sh_selling / o

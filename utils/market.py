@@ -627,6 +627,10 @@ def format_ticker_option(ticker):
         return f"{ticker} — {name}"
     return ticker
 
+_price_source = {}
+def get_price_source(ticker):
+    return _price_source.get(ticker)
+
 def parse_ticker_option(display_str):
     return display_str.split(" —")[0].strip()
 
@@ -680,6 +684,7 @@ def _fetch_stock_market_data_impl(ticker):
         company_name = get_company_name(ticker)
         current = _fetch_current_price(ticker)
         if current is not None:
+            _price_source[ticker] = 'live'
             return current, None, company_name
         data = None
         for period in ("5d", "1mo", "6mo"):
@@ -692,6 +697,7 @@ def _fetch_stock_market_data_impl(ticker):
         if close_series.empty:
             return None, None, None
         close_price = float(close_series.iloc[-1])
+        _price_source[ticker] = 'close'
         return close_price, None, company_name
     except Exception:
         return None, None, None
@@ -708,6 +714,7 @@ def warm_price_cache(tickers):
         p = _fetch_current_price(t)
         if p is not None:
             _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
+            _price_source[t] = 'live'
         else:
             remaining.append(t)
     if not remaining:
@@ -732,6 +739,7 @@ def warm_price_cache(tickers):
                 if not valid_closes.empty:
                     price = float(valid_closes.iloc[-1])
                     _cache_600[f"price_{t}"] = (price, None, get_company_name(t))
+                    _price_source[t] = 'close'
             except Exception:
                 continue
     except Exception:
