@@ -932,7 +932,8 @@ window.__tv.chart.timeScale().fitContent();
                         from_date = datetime.fromtimestamp(week_ago).strftime('%Y-%m-%d')
                         articles = await loop.run_in_executor(
                             None, lambda: _fh().company_news(t, _from=from_date, to=today))
-                        _news_state['articles'] = articles[:5]
+                        articles = [a for a in articles if 'yahoo' not in a.get('source', '').lower()][:5]
+                        _news_state['articles'] = articles
                         _news_state['ticker'] = t
                         _news_container.set_text('')
                         _news_container.clear()
