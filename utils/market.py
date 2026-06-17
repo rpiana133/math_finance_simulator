@@ -573,6 +573,7 @@ POPULAR_ETFS = {
     "ARKW": "ARK Next Gen Internet ETF",
     "AIEQ": "Amplify AI Powered Equity ETF",
     "CHAT": "Roundhill Generative AI ETF",
+    "DRAM": "Roundhill Memory ETF",
     "SMH": "VanEck Semiconductor ETF",
     "SOXX": "iShares Semiconductor ETF",
     "SOXQ": "Invesco Semiconductor ETF",
