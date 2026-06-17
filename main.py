@@ -664,6 +664,18 @@ def main_page():
             price_val = ui.label().classes('text-xl font-bold')
             price_sub = ui.label().classes('text-sm text-muted')
             action = ui.radio(['Buy', 'Sell'], value='Buy').props('inline dense').classes('mt-1')
+
+            def _on_action_change():
+                if action.value == 'Sell':
+                    owned = {t: format_ticker_option(t) for t in profile.get('holdings', {})}
+                    sel.options = owned or {'': '— No positions —'}
+                    sel.label = 'Your holdings'
+                else:
+                    sel.options = opts
+                    sel.label = 'Search symbol'
+                sel.value = None
+
+            action.on_value_change(_on_action_change)
             mode = ui.radio(['Shares', 'Amount ($)'], value='Shares').props('inline dense')
             shares_in = ui.number(label='Shares', value=1.0, min=0.001, step=0.1, format='%.4f').classes('w-full')
             amount_in = ui.number(label='Amount ($)', value=100.0, min=1.0, step=10.0).classes('w-full')
