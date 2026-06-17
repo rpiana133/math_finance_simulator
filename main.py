@@ -1,7 +1,8 @@
-import asyncio, json, os, logging
+import asyncio, json, os, logging, io
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+import requests
 import yfinance as yf
 import finnhub
 
@@ -53,6 +54,9 @@ def _relative_time(ts: int) -> str:
 
 def _fetch_macro() -> dict:
     result = {}
+    now = datetime.now()
+    frd_from = now.replace(year=now.year-2).strftime('%Y-%m-%d')
+    frd_to = now.strftime('%Y-%m-%d')
     try:
         d = _flatten_cols(yf.download('^VIX', period='2y', progress=False, timeout=15))
         v = d['Close'].dropna()
@@ -60,12 +64,13 @@ def _fetch_macro() -> dict:
             vv = v.iloc[-1]; result['vix'] = f'{vv:.2f}'
             result['vix_color'] = 'positive' if vv < 15 else 'warning' if vv < 25 else 'negative'
     except: result['vix'] = 'N/A'; result['vix_color'] = ''
-    for key, ticker in [('cpi', 'CPIAUCNS'), ('ppi', 'PPIACO'), ('pce', 'PCEPI')]:
+    for key, series in [('cpi', 'CPIAUCNS'), ('ppi', 'PPIACO'), ('pce', 'PCEPI')]:
         try:
-            d = _flatten_cols(yf.download(ticker, period='1y', progress=False, timeout=15))
-            s = d['Close'].dropna()
-            if len(s) >= 2:
-                yoy = ((s.iloc[-1] / s.iloc[0]) - 1) * 100
+            r = requests.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={frd_from}&coed={frd_to}', timeout=10)
+            df = pd.read_csv(io.StringIO(r.text))
+            vals = df.iloc[:, 1].dropna()
+            if len(vals) >= 13:
+                yoy = ((vals.iloc[-1] / vals.iloc[-13]) - 1) * 100
                 result[key] = f'{yoy:+.1f}%'
                 result[f'{key}_color'] = 'positive' if yoy < 0 else 'negative'
             else: result[key] = 'N/A'; result[f'{key}_color'] = ''
