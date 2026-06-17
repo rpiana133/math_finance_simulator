@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import yfinance as yf
+import finnhub
 
 from nicegui import app, ui
 import pandas as pd
@@ -33,6 +34,22 @@ def _fmt(cents) -> str:
     return f"{sign}${abs_c // 100:,}.{abs_c % 100:02d}"
 
 STARTING_CASH: int = 100000  # $1000.00 in cents
+
+_fh_client = None
+def _fh():
+    global _fh_client
+    if _fh_client is None:
+        key = os.environ.get("FINNHUB_API_KEY", "")
+        _fh_client = finnhub.Client(api_key=key) if key else None
+    return _fh_client
+
+def _relative_time(ts: int) -> str:
+    diff = int(datetime.now().timestamp()) - ts
+    if diff < 60: return "just now"
+    if diff < 3600: return f"{diff // 60}m ago"
+    if diff < 86400: return f"{diff // 3600}h ago"
+    if diff < 604800: return f"{diff // 86400}d ago"
+    return datetime.fromtimestamp(ts).strftime("%b %d")
 
 # ── Fonts (Quasar needs Material Icons internally) ───────
 ui.add_head_html(
@@ -899,6 +916,56 @@ window.__tv.chart.timeScale().fitContent();
 
                     cp_sel.on_value_change(lambda: _chart()); cs_sel.on_value_change(lambda: _chart())
                     vs.on_value_change(lambda: _chart())
+
+            # ══ Research: News ══
+            ui.separator().classes('mt-4')
+            with ui.card().classes('w-full'):
+                ui.label('\U0001f4f0 Market News').classes('font-bold text-lg mb-3')
+                _news_container = ui.label()
+                _news_state = {'ticker': None}
+
+                async def _news_worker(t):
+                    try:
+                        loop = asyncio.get_event_loop()
+                        today = datetime.now().strftime('%Y-%m-%d')
+                        week_ago = (datetime.now().timestamp() - 7 * 86400)
+                        from_date = datetime.fromtimestamp(week_ago).strftime('%Y-%m-%d')
+                        articles = await loop.run_in_executor(
+                            None, lambda: _fh().company_news(t, _from=from_date, to=today))
+                        _news_state['articles'] = articles[:5]
+                        _news_state['ticker'] = t
+                        _news_container.set_text('')
+                        _news_container.clear()
+                        if not articles:
+                            with _news_container:
+                                ui.label('No recent news.').classes('text-muted text-sm')
+                            return
+                        with _news_container:
+                            for a in articles[:5]:
+                                ts = a.get('datetime', 0)
+                                headline = a.get('headline', '')
+                                url = a.get('url', '')
+                                source = a.get('source', '')
+                                summary = a.get('summary', '')
+                                with ui.card().classes('w-full q-pa-sm q-mb-sm'):
+                                    with ui.row().classes('items-start gap-2'):
+                                        ui.link(headline, url, new_tab=True).classes('font-semibold text-sm')
+                                        ui.label(f'— {source} \u00b7 {_relative_time(ts)}').classes('text-xs text-muted')
+                                    if summary:
+                                        ui.label(summary).classes('text-xs text-gray-600 line-clamp-2')
+                    except Exception as e:
+                        logger.error(f"News error for {t}: {e}", exc_info=True)
+                        _news_container.set_text(f'Error loading news: {e}')
+
+                def _load_news():
+                    t = vs.value
+                    if not t:
+                        _news_container.set_text('Select a stock to view news.')
+                        return
+                    _news_container.set_text('Loading news...')
+                    ui.timer(0, lambda t=t: _news_worker(t), once=True)
+
+                vs.on_value_change(lambda: _load_news())
 
         # ── ALERTS ──
         with ui.tab_panel(ta):

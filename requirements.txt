@@ -10,3 +10,4 @@ google-cloud-storage
 plotly
 cachetools
 urllib3<2
+finnhub-python
