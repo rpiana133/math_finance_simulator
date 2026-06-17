@@ -670,7 +670,12 @@ def main_page():
                 if p['history']:
                     with ui.card().classes('w-full mt-4'):
                         ui.label('Trade History').classes('font-bold text-lg mb-2')
-                        ui.table.from_pandas(pd.DataFrame(reversed(p['history']))).classes('w-full').props('hide-bottom')
+                        df = pd.DataFrame(reversed(p['history']))
+                        cols = ['time', 'type', 'ticker', 'shares', 'price', 'total', 'cost_basis', 'tax']
+                        for c in cols:
+                            if c not in df.columns:
+                                df[c] = ''
+                        ui.table.from_pandas(df[cols]).classes('w-full').props('hide-bottom')
 
             async def _load_portfolio():
                 loop = asyncio.get_event_loop()
@@ -698,6 +703,7 @@ def main_page():
                 sel.value = None
                 position_info.set_text('')
                 limit_warn.set_text('')
+                tax_info.set_text('')
 
             action.on_value_change(_on_action_change)
             mode = ui.radio(['Shares', 'Amount ($)'], value='Shares').props('inline dense')
@@ -707,6 +713,7 @@ def main_page():
             preview = ui.label().classes('text-sm text-muted mt-1')
             position_info = ui.label().classes('text-sm text-muted mt-1')
             limit_warn = ui.label().classes('text-sm text-negative mt-1')
+            tax_info = ui.label().classes('text-sm text-muted mt-1')
 
             def _upd_sel():
                 t = sel.value
@@ -728,6 +735,7 @@ def main_page():
                     position_info.set_text(f'\U0001f4e6 Your position: {sh:.4f} shares @ ${avg:.2f} = ${mv:,.2f}')
                 else:
                     position_info.set_text('')
+                tax_info.set_text('')
 
             def _upd_mode():
                 s = mode.value == 'Shares'
@@ -750,6 +758,7 @@ def main_page():
                     preview.set_text(f'\u2248 ${cost:,.2f}  \u00b7  {c_pct:.1f}% of cash  \u00b7  est. weight {w:.1f}%')
                     if cost_c > profile['cash']:
                         warn = f'\u26a0 Insufficient cash ({_fmt(profile["cash"])} available, {_fmt(cost_c)} needed)'
+                    tax_info.set_text('')
                 else:
                     if t in profile['holdings']:
                         o = profile['holdings'][t]['shares']
@@ -760,8 +769,16 @@ def main_page():
                             warn = f'\u26a0 Only {o:.4f} shares owned'
                         elif mode.value == 'Amount ($)' and cost > o * pr + 0.01:
                             warn = '\u26a0 Exceeds position value'
+                        sh_selling = shares_in.value if mode.value == 'Shares' else cost / pr
+                        frac = sh_selling / o
+                        cb_d = (frac * profile['holdings'][t]['total_cost']) / 100.0
+                        profit_d = cost - cb_d
+                        tax_d = max(0, profit_d * 0.15)
+                        net_d = cost - tax_d
+                        tax_info.set_text(f'Cost basis: ${cb_d:.2f}  \u00b7  Profit: ${profit_d:.2f}\nTax (15%): ${tax_d:.2f}  \u2192  Net proceeds: ${net_d:.2f} (unsettled)')
                     else:
                         preview.set_text('')
+                        tax_info.set_text('')
                 limit_warn.set_text(warn)
 
             sel.on_value_change(lambda: _upd_sel()); sel.on_value_change(lambda: _upd_preview())
@@ -775,6 +792,14 @@ def main_page():
                 if not d: return
                 with ui.card().classes('w-full bg-blue-50 border-2 border-blue-200'):
                     ui.label(f"Confirm {d['action']}: {d['shares']:.4f} shares of {d['ticker']} at ${d['price']:.2f} = ${d['cost']:.2f}").classes('font-semibold text-blue-900')
+                    if d['action'] == 'Sell' and d['ticker'] in profile.get('holdings', {}):
+                        o = profile['holdings'][d['ticker']]['shares']
+                        _frac = d['shares'] / o
+                        _cb = (_frac * profile['holdings'][d['ticker']]['total_cost']) / 100.0
+                        _profit = d['cost'] - _cb
+                        _tax = max(0, _profit * 0.15)
+                        _net = d['cost'] - _tax
+                        ui.label(f'Cost basis: ${_cb:.2f}  \u00b7  Profit: ${_profit:.2f}  \u00b7  Tax (15%): ${_tax:.2f}  \u2192  Net: ${_net:.2f}').classes('text-sm text-muted')
                     with ui.row().classes('gap-3 mt-3'):
                         ui.button(f"\u2705 Confirm {d['action']}", on_click=lambda: _exec(d)).props('color=primary')
                         ui.button('\u274c Cancel', on_click=lambda: (pending.update({'data': None}), confirm_card.refresh()))
@@ -792,6 +817,7 @@ def main_page():
                     profile.setdefault('history', []).append({
                         'type': 'Buy', 'ticker': t, 'shares': round(data['shares'], 4),
                         'price': round(data['price'], 2), 'total': round(data['cost'], 2),
+                        'cost_basis': '', 'tax': '',
                         'time': datetime.now().strftime('%Y-%m-%d %H:%M')})
                 else:
                     owned = profile['holdings'][t]['shares']
@@ -809,6 +835,7 @@ def main_page():
                     profile.setdefault('history', []).append({
                         'type': 'Sell', 'ticker': t, 'shares': round(data['shares'], 4),
                         'price': round(data['price'], 2), 'total': round(data['cost'], 2),
+                        'cost_basis': round(cb / 100.0, 2), 'tax': round(tax_c / 100.0, 2),
                         'time': datetime.now().strftime('%Y-%m-%d %H:%M')})
                 _save(email, profile)
                 pending['data'] = None
