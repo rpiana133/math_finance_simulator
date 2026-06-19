@@ -79,9 +79,8 @@ def _fetch_macro() -> dict:
             r = requests.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={frd_from}&coed={frd_to}', timeout=10)
             df = pd.read_csv(io.StringIO(r.text))
             vals = df.iloc[:, 1].dropna()
-            if len(vals) >= 13:
-                yoy = ((vals.iloc[-1] / vals.iloc[-13]) - 1) * 100
-                return key, f'{yoy:+.1f}%', f'{key}_color', ('positive' if yoy < 0 else 'negative')
+            if not vals.empty:
+                return key, f'{vals.iloc[-1]:.1f}', f'{key}_color', ''
             return key, 'N/A', f'{key}_color', ''
         except: return key, 'N/A', f'{key}_color', ''
     with ThreadPoolExecutor(max_workers=5) as ex:
@@ -561,13 +560,13 @@ def main_page():
         items = ''
         for label, val_key, color_key, sub in [
             ('VIX', 'vix', 'vix_color', 'Market fear gauge (<15 calm, >25 panic)'),
-            ('CPI', 'cpi', 'cpi_color', 'Consumer inflation, year-over-year'),
-            ('PPI', 'ppi', 'ppi_color', 'Producer input costs, year-over-year'),
-            ('PCE', 'pce', 'pce_color', "Fed's preferred inflation gauge, YoY"),
+            ('CPI', 'cpi', 'cpi_color', 'Consumer price index (1982-84=100)'),
+            ('PPI', 'ppi', 'ppi_color', 'Producer price index (1982=100)'),
+            ('PCE', 'pce', 'pce_color', 'Personal consumption expenditures price index (2017=100)'),
             ('DXY', 'dxy', None, f"US Dollar vs majors ({d.get('dxy_chg', '')} 1mo)"),
         ]:
             val = d.get(val_key, 'N/A')
-            cls = f'text-{d.get(color_key)}' if color_key else ''
+            cls = f'text-{d.get(color_key)}' if color_key and d.get(color_key) else ''
             items += f'<div class="metric-box"><div class="label">{label}</div><div class="value {cls}">{val}</div><div class="sub">{sub}</div></div>'
         ui.html(f'<div class="psummary" style="margin-top:0">{items}</div>', sanitize=False)
     macro_bar()
