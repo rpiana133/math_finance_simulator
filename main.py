@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 def _cents(dollars: float) -> int:
     return int(round(dollars * 100))
 
+def _require_env(name: str) -> str:
+    val = os.environ.get(name)
+    if not val:
+        raise RuntimeError(f"{name} environment variable must be set")
+    return val
+
 def _fmt(cents) -> str:
     cents = int(cents)
     sign = '-' if cents < 0 else ''
@@ -295,9 +301,9 @@ async def callback_route(code: str, request: Request):
         return RedirectResponse('/')
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
-        return HTMLResponse(f"""
+        return HTMLResponse("""
             <h2 style="color:#ef4444;font-family:sans-serif">Authentication failed</h2>
-            <p style="font-family:monospace;color:#6b7280">{str(e)[:300]}</p>
+            <p style="font-family:sans-serif;color:#6b7280">Authentication failed. Please try again.</p>
             <a href="/" style="color:#2563eb">Try again</a>
         """)
 
@@ -1318,6 +1324,6 @@ ui.run(
     title='Math Finance Simulator',
     host='0.0.0.0',
     port=int(os.environ.get('PORT', 8080)),
-    storage_secret=os.environ.get('STORAGE_SECRET', 'dev-secret-change-me'),
+    storage_secret=_require_env('STORAGE_SECRET'),
     reload=False,
 )

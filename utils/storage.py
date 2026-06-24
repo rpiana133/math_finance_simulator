@@ -19,12 +19,9 @@ def _gcs_creds():
     if raw:
         try:
             return json.loads(raw)
-        except Exception:
-            pass
-    if os.path.exists("math-finance-simulator-51d674093aa1.json"):
-        with open("math-finance-simulator-51d674093aa1.json", "r") as f:
-            return json.load(f)
-    raise KeyError("GCS_SERVICE_ACCOUNT environment variable not set (and no JSON key file found)")
+        except Exception as e:
+            _logger.warning(f"Failed to parse GCS_SERVICE_ACCOUNT env var: {e}")
+    raise KeyError("GCS_SERVICE_ACCOUNT environment variable not set")
 
 
 def _gcs_token():

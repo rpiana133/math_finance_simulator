@@ -21,9 +21,6 @@ def get_client_config():
     raw = os.environ.get("GOOGLE_CLIENT_SECRET")
     if raw:
         return json.loads(raw)
-    if os.path.exists("client_secret.json"):
-        with open("client_secret.json", "r") as f:
-            return json.load(f)
     raise KeyError("GOOGLE_CLIENT_SECRET environment variable not set")
 
 
