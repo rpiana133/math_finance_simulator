@@ -1,7 +1,10 @@
 import json
+import logging
 import os
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+
+_logger = logging.getLogger(__name__)
 
 SCOPES = [
     'https://www.googleapis.com/auth/classroom.coursework.students',
@@ -10,7 +13,12 @@ SCOPES = [
     'openid'
 ]
 
-TEACHER_EMAIL = "rpiana@stjohnsguam.com"
+_teacher_emails_raw = os.environ.get("TEACHER_EMAILS", "")
+if _teacher_emails_raw:
+    TEACHER_EMAILS = [e.strip() for e in _teacher_emails_raw.split(",")]
+else:
+    TEACHER_EMAILS = ["rpiana@stjohnsguam.com"]
+    _logger.warning("TEACHER_EMAILS env var not set, using hardcoded default")
 
 
 def get_redirect_uri():
@@ -52,4 +60,4 @@ def exchange_code(code, redirect_uri=None):
 
 
 def is_teacher(email):
-    return email == TEACHER_EMAIL
+    return email in TEACHER_EMAILS
