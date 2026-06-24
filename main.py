@@ -244,13 +244,15 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 # ── Profile cache ────────────────────────────────────────
 _profiles: dict = {}
 
-def _migrate_profile(p: dict) -> dict:
-    if isinstance(p.get("cash"), int):
+def _migrate_profile(p: dict | None) -> dict | None:
+    if p is None or isinstance(p.get("cash"), int):
         return p
-    p["cash"] = int(round(p.get("cash", 0) * 100))
-    p["unsettled_cash"] = int(round(p.get("unsettled_cash", 0) * 100))
-    p["total_dividends_earned"] = int(round(p.get("total_dividends_earned", 0) * 100))
-    p["total_deposits"] = int(round(p.get("total_deposits", 0) * 100))
+    dep = p.get("total_deposits", 0)
+    cash_in_cents = isinstance(dep, int)
+    p["cash"] = int(round(p.get("cash", 0))) if cash_in_cents else int(round(p.get("cash", 0) * 100))
+    p["unsettled_cash"] = int(round(p.get("unsettled_cash", 0) * (1 if cash_in_cents else 100)))
+    p["total_dividends_earned"] = int(round(p.get("total_dividends_earned", 0) * (1 if cash_in_cents else 100)))
+    p["total_deposits"] = dep if isinstance(dep, int) else int(round(dep * 100))
     for h in p.get("holdings", {}).values():
         h["total_cost"] = int(round(h.get("total_cost", 0) * 100))
     for e in p.get("unsettled_entries", []):

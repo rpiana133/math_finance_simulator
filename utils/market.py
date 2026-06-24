@@ -552,6 +552,11 @@ POPULAR_STOCKS = {
     "BTC-USD": "Bitcoin",
     "ETH-USD": "Ethereum",
     "SOL-USD": "Solana",
+    "ACHV": "Achieve Life Sciences",
+    "CBRS": "Cerebras Systems",
+    "NBIS": "Nebius Group",
+    "LUNR": "Intuitive Machines",
+    "HIMS": "Hims & Hers",
 }
 
 POPULAR_ETFS = {
@@ -612,6 +617,16 @@ POPULAR_ETFS = {
     "VNQ": "Vanguard Real Estate ETF",
     "VT": "Total World Stock ETF",
     "VXUS": "Total International Stock ETF",
+    "SOXL": "Direxion Daily Semiconductor Bull 3X ETF",
+    "TQQQ": "ProShares UltraPro QQQ",
+    "ARKX": "ARK Space & Defense Innovation ETF",
+    "UFO": "Procure Space ETF",
+    "SHLD": "Global X Defense Tech ETF",
+    "LIT": "Global X Lithium & Battery Tech ETF",
+    "BITO": "ProShares Bitcoin Strategy ETF",
+    "MEMY": "Tuttle Capital Meme Stock Income Blast ETF",
+    "DRIP": "Direxion Daily S&P Oil & Gas Exp. & Prod. Bear 2X Shares",
+    "ARTY": "iShares Future AI & Tech ETF",
 }
 
 STOCK_TICKERS = list(POPULAR_STOCKS.keys())
@@ -667,17 +682,11 @@ def _fetch_current_price(ticker):
     try:
         t = yf.Ticker(ticker)
         fi = t.fast_info
-        for key in ('lastPrice', 'regularMarketPrice', 'previousClose'):
-            v = fi.get(key)
-            if v is not None:
-                return float(v)
-    except Exception:
-        pass
-    try:
-        info = t.info
-        for key in ('regularMarketPrice', 'currentPrice', 'marketPrice', 'previousClose'):
-            if key in info and info[key] is not None:
-                return float(info[key])
+        if fi.get('marketState', '') == 'REGULAR':
+            for key in ('lastPrice', 'regularMarketPrice', 'previousClose'):
+                v = fi.get(key)
+                if v is not None:
+                    return float(v)
     except Exception:
         pass
     return None
