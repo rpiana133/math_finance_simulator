@@ -557,6 +557,14 @@ POPULAR_STOCKS = {
     "NBIS": "Nebius Group",
     "LUNR": "Intuitive Machines",
     "HIMS": "Hims & Hers",
+    "NVO": "Novo Nordisk ADR",
+    "TDOC": "Teladoc Health",
+    "VKTX": "Viking Therapeutics",
+    "QURE": "uniQure",
+    "IBRX": "ImmunityBio",
+    "DFTX": "Definium Therapeutics",
+    "RGNX": "REGENXBIO",
+    "BOLD": "Boundless Bio",
 }
 
 POPULAR_ETFS = {
@@ -627,6 +635,12 @@ POPULAR_ETFS = {
     "MEMY": "Tuttle Capital Meme Stock Income Blast ETF",
     "DRIP": "Direxion Daily S&P Oil & Gas Exp. & Prod. Bear 2X Shares",
     "ARTY": "iShares Future AI & Tech ETF",
+    "VHT": "Vanguard Health Care ETF",
+    "IXJ": "iShares Global Healthcare ETF",
+    "FHLC": "Fidelity MSCI Health Care Index ETF",
+    "IYH": "iShares U.S. Healthcare ETF",
+    "IBB": "iShares Biotechnology ETF",
+    "XBI": "SPDR S&P Biotech ETF",
 }
 
 STOCK_TICKERS = list(POPULAR_STOCKS.keys())
