@@ -174,11 +174,18 @@ def load_student_profile(email: str) -> dict | None:
 
         if data is None or is_fresh_empty:
             # Check old formats for migration
+            migrated_path = None
             fallback_data = _gcs_read(f"{BLOB_PREFIX}{email}.json")
-            if fallback_data is None:
+            if fallback_data is not None:
+                migrated_path = f"{BLOB_PREFIX}{email}.json"
+            else:
                 fallback_data = _gcs_read(f"{key}.json")
-                if fallback_data is None:
+                if fallback_data is not None:
+                    migrated_path = f"{key}.json"
+                else:
                     fallback_data = _gcs_read(f"{email}.json")
+                    if fallback_data is not None:
+                        migrated_path = f"{email}.json"
 
             if fallback_data is not None:
                 fallback_profile = json.loads(fallback_data)
@@ -191,6 +198,12 @@ def load_student_profile(email: str) -> dict | None:
                 if not is_fallback_fresh or data is None:
                     profile = fallback_profile
                     save_student_profile(email, profile)
+                    # Delete the legacy blob after migration to prevent duplicates
+                    if migrated_path:
+                        try:
+                            _gcs_delete(migrated_path)
+                        except Exception:
+                            pass
                     # Sync to running services profile cache to force immediate recovery
                     try:
                         from services.profile import _profiles
@@ -235,15 +248,27 @@ def delete_student_profile(email: str) -> None:
     global _profile_cache
     key = _safe_email_key(email)
     _gcs_delete(f"{BLOB_PREFIX}{key}.json")
+    # Clean up all possible legacy paths
+    for legacy_path in [f"{BLOB_PREFIX}{email}.json", f"{key}.json", f"{email}.json"]:
+        try:
+            _gcs_delete(legacy_path)
+        except Exception:
+            pass
     _profile_cache.pop(email, None)
+    # Clear in-memory profile cache
+    try:
+        from services.profile import _profiles
+        _profiles.pop(email, None)
+    except Exception:
+        pass
 
 
 def get_gcs_database() -> dict[str, dict]:
     names = _gcs_list(BLOB_PREFIX)
     db: dict[str, dict] = {}
     for name in names:
-        email = name[len(BLOB_PREFIX) : -5]
+        key = name[len(BLOB_PREFIX) : -5]
         data = _gcs_read(name)
         if data:
-            db[email] = json.loads(data)
+            db[key] = json.loads(data)
     return db

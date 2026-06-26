@@ -1979,7 +1979,7 @@ def main_page():
                             rows.append(
                                 {
                                     "Student": p.get("name", "Unknown"),
-                                    "Email": e.split("@")[0],
+                                    "ID": e[:16] + "..." if len(e) > 16 else e,
                                     "Net Worth": nw,
                                     "P&L": pl,
                                     "Return": (pl / (STARTING_CASH_CENTS / 100)) * 100,
