@@ -47,6 +47,7 @@ from utils.market import (
     ETF_TICKERS,
     STOCK_TICKERS,
     _flatten_cols,
+    fetch_full_history,
     fetch_stock_market_data,
     format_ticker_option,
     get_price_source,
@@ -83,6 +84,7 @@ def _is_safe_article(headline: str, summary: str) -> bool:
 
 
 _executor = ThreadPoolExecutor(max_workers=4)
+_movers_executor = ThreadPoolExecutor(max_workers=1)
 _session_store: dict[str, dict] = {}
 _session_lock = Lock()
 
@@ -646,7 +648,7 @@ def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
 
 # ── Main page ────────────────────────────────────────────
 @ui.page("/")
-def main_page():
+async def main_page():
     now = datetime.utcnow().timestamp()
     last_activity = _get_session("last_activity")
     if last_activity and now - last_activity > 1800:
@@ -675,7 +677,7 @@ def main_page():
                 ui.link("Terms of Service", "/terms")
         return
 
-    # ── Load profile ──
+    # ── Load profile (fast, in-memory) ──
     _touch_session()
     email = _get_session("email")
     name = _get_session("name", "Student")
@@ -705,15 +707,33 @@ def main_page():
             tickers_to_warm.add(a["ticker"])
         if tickers_to_warm:
             _executor.submit(warm_price_cache, list(tickers_to_warm))
-        # Pre-fill market movers 30-min cache so the movers section loads instantly
-        _executor.submit(_prewarm_movers)
+        _movers_executor.submit(_prewarm_movers)
     except Exception as e:
         logger.error(f"Error warming price cache: {e}")
 
     profile = _process_settlement(email, profile)
     deposit_amt, deposit_weeks = _process_weekly(email, profile)
-    profile = _process_dividends(email, profile)
-    triggered = _check_alerts(profile)
+
+    # Defer slow profile processing (dividends yfinance calls, alert checks) to background
+    _profile_ready = False
+
+    def _finish_processing():
+        try:
+            p = _process_dividends(email, profile)
+            profile.clear()
+            profile.update(p)
+            msgs = _check_alerts(profile)
+            _profile_ready = True
+            for msg in msgs:
+                ui.html(
+                    f'<div class="banner banner-warning">\U0001f514 {msg}</div>',
+                    sanitize=False,
+                )
+        except Exception as e:
+            logger.error(f"Background profile processing error: {e}")
+            _profile_ready = True
+
+    ui.timer(0, _finish_processing, once=True)
 
     # ── Top Bar ──
     ui.html(
@@ -764,15 +784,13 @@ def main_page():
     summary()
     ui.timer(0.1, _load_summary, once=True)
 
-    # Banners
+    # Banners (banners from deferred processing shown on next summary refresh)
     if deposit_amt:
         _audit("DEPOSIT", email, {"amount_cents": deposit_amt, "weeks": deposit_weeks})
         ui.html(
             f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>',
             sanitize=False,
         )
-    for msg in triggered:
-        ui.html(f'<div class="banner banner-warning">\U0001f514 {msg}</div>', sanitize=False)
 
     # ── Macro Indicators ──
     _macro_state: dict = {"data": None}
@@ -1479,19 +1497,17 @@ def main_page():
                     async def _chart_worker(t, period, style):
                         try:
                             loop = asyncio.get_event_loop()
-                            pr, _, company = await loop.run_in_executor(
-                                None, fetch_stock_market_data, t
-                            )
-                            chart_price.set_text(f"${pr:.2f}" if pr else "")
-                            chart_sub.set_text(company if pr else "")
-                            hist = await loop.run_in_executor(
-                                None,
-                                lambda: _flatten_cols(
-                                    yf.download(
-                                        t, period=period, progress=False, timeout=20
-                                    )
+                            pr_result, hist = await asyncio.gather(
+                                loop.run_in_executor(
+                                    None, fetch_stock_market_data, t
+                                ),
+                                loop.run_in_executor(
+                                    None, fetch_full_history, t, period
                                 ),
                             )
+                            pr, _, company = pr_result
+                            chart_price.set_text(f"${pr:.2f}" if pr else "")
+                            chart_sub.set_text(company if pr else "")
                             if hist is None or len(hist) < 2:
                                 logger.error(
                                     f"Chart: not enough history for {t} (period={period}, rows={len(hist) if hist is not None else 'None'})"
@@ -1691,53 +1707,56 @@ def main_page():
 
                 vs.on_value_change(lambda: _load_news())
 
-                tabs.on_value_change(lambda tab: (
-                    ui.run_javascript("""
-                        var el = document.getElementById('tvchart');
-                        if (!el) return;
-                        if (window.__tv && window.__tv.ready) {
-                            var w = el.clientWidth, h = el.clientHeight;
-                            if (w > 0 && h > 0) { window.__tv.chart.resize(w, h); }
-                            window.__tv.chart.timeScale().fitContent();
-                        } else {
-                            (function initTv() {
-                                if (!initTv._max) { initTv._max = Date.now() + 10000; }
-                                if (Date.now() > initTv._max) { console.error('Chart init timeout'); return; }
-                                try {
-                                    if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 200); return; }
-                                    var iw = el.clientWidth || 800, ih = el.clientHeight || 380;
-                                    var c = LightweightCharts.createChart(el, {
-                                        width: iw, height: ih,
-                                        layout: { textColor: '#1f2937', fontFamily: "'Inter',-apple-system,sans-serif", fontSize: 12 },
-                                        grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
-                                        timeScale: { borderColor: 'rgba(128,128,128,0.2)', timeVisible: false },
-                                        rightPriceScale: { borderColor: 'rgba(128,128,128,0.2)' },
-                                        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-                                        handleScroll: false, handleScale: false,
-                                    });
-                                    window.__tv = { ready: true, chart: c };
-                                    window.__tv.candle = c.addSeries(LightweightCharts.CandlestickSeries, {
-                                        upColor: '#10b981', downColor: '#f43f5e',
-                                        borderUpColor: '#10b981', borderDownColor: '#f43f5e',
-                                        wickUpColor: '#10b981', wickDownColor: '#f43f5e',
-                                        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-                                    });
-                                    window.__tv.line = c.addSeries(LightweightCharts.LineSeries, {
-                                        color: '#3b82f6', lineWidth: 2,
-                                        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-                                    });
-                                    if (window.ResizeObserver) {
-                                        new ResizeObserver(function() {
-                                            var w2 = el.clientWidth, h2 = el.clientHeight;
-                                            if (w2 > 0 && h2 > 0) { c.resize(w2, h2); }
-                                        }).observe(el);
-                                    }
-                                } catch(e) { setTimeout(initTv, 200); }
-                            })();
-                        }
-                    """) if tab == tr else None,
-                    _chart() if tab == tr and vs.value else None,
-                ))
+                def _on_tab_change(e):
+                    if e.value == "\U0001f52c Research":
+                        ui.run_javascript("""
+                            var el = document.getElementById('tvchart');
+                            if (!el) return;
+                            if (window.__tv && window.__tv.ready) {
+                                var w = el.clientWidth, h = el.clientHeight;
+                                if (w > 0 && h > 0) { window.__tv.chart.resize(w, h); }
+                                window.__tv.chart.timeScale().fitContent();
+                            } else {
+                                (function initTv() {
+                                    if (!initTv._max) { initTv._max = Date.now() + 10000; }
+                                    if (Date.now() > initTv._max) { console.error('Chart init timeout'); return; }
+                                    try {
+                                        if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 200); return; }
+                                        var iw = el.clientWidth || 800, ih = el.clientHeight || 380;
+                                        var c = LightweightCharts.createChart(el, {
+                                            width: iw, height: ih,
+                                            layout: { textColor: '#1f2937', fontFamily: "'Inter',-apple-system,sans-serif", fontSize: 12 },
+                                            grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
+                                            timeScale: { borderColor: 'rgba(128,128,128,0.2)', timeVisible: false },
+                                            rightPriceScale: { borderColor: 'rgba(128,128,128,0.2)' },
+                                            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                                            handleScroll: false, handleScale: false,
+                                        });
+                                        window.__tv = { ready: true, chart: c };
+                                        window.__tv.candle = c.addSeries(LightweightCharts.CandlestickSeries, {
+                                            upColor: '#10b981', downColor: '#f43f5e',
+                                            borderUpColor: '#10b981', borderDownColor: '#f43f5e',
+                                            wickUpColor: '#10b981', wickDownColor: '#f43f5e',
+                                            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                                        });
+                                        window.__tv.line = c.addSeries(LightweightCharts.LineSeries, {
+                                            color: '#3b82f6', lineWidth: 2,
+                                            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                                        });
+                                        if (window.ResizeObserver) {
+                                            new ResizeObserver(function() {
+                                                var w2 = el.clientWidth, h2 = el.clientHeight;
+                                                if (w2 > 0 && h2 > 0) { c.resize(w2, h2); }
+                                            }).observe(el);
+                                        }
+                                    } catch(err) { setTimeout(initTv, 200); }
+                                })();
+                            }
+                        """)
+                        if vs.value:
+                            _chart()
+
+                tabs.on_value_change(_on_tab_change)
 
         # ── ALERTS ──
         with ui.tab_panel(ta):
