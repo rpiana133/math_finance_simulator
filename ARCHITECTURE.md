@@ -7,49 +7,74 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 | Layer | Technology |
 |---|---|
 | UI | NiceGUI 3.6.1 (Quasar components, Vue.js underlay) |
-| Auth | Google Workspace OAuth 2.0 (`utils/auth.py`) |
+| Auth | Google Workspace OAuth 2.0 (`utils/auth.py`) with domain-restricted hd validation |
 | Data | Yahoo Finance via `yfinance` (`utils/market.py`) |
 | News | Finnhub (`finnhub-python`) — company news in Research tab |
-| Storage | Google Cloud Storage via `google-cloud-storage` (`utils/storage.py`) |
+| Storage | Google Cloud Storage via `google-cloud-storage` (`utils/storage.py`) with HMAC-SHA-256 blob keys |
+| Sessions | In-memory `_session_store` dict + opaque `secrets.token_urlsafe(32)` tokens |
 | Charts | Plotly (pie charts), Lightweight Charts (price history) |
 | Deploy | Docker → GCP Cloud Run (us-east1) |
 
 ## File Layout
 ```
-├── main.py                  # App entry — routes, UI, all 7 sections, teacher admin
-├── requirements.txt         # Dependencies
-├── Dockerfile               # Cloud Run container
+├── main.py                  # App entry — routes, UI, all 7 sections, teacher admin, session store
+├── requirements.txt         # Production dependencies (no pytest)
+├── requirements-dev.txt     # Dev dependencies (pytest, etc.)
+├── Dockerfile               # Cloud Run container + pip-audit scan
 ├── .dockerignore            # Excludes .git, venv, *.json, .env.yaml from Docker image
+├── .gitignore               # .env.yaml, .pytest_cache, etc.
 ├── .env.yaml                # Secret env-var template (gitignored values)
 ├── ARCHITECTURE.md          # This file
+├── security_threat_model.md # STRIDE threat model
 ├── utils/
-│   ├── auth.py              # OAuth URL generation, token exchange, teacher check
-│   ├── storage.py           # GCS CRUD: load/save/delete profiles, get full database
-│   └── market.py            # yfinance wrappers: prices, history, dividends, top movers
-└── client_secret.json       # Google OAuth credentials (gitignored)
+│   ├── auth.py              # OAuth URL generation, token exchange, hd validation, teacher check
+│   ├── storage.py           # GCS CRUD + GCS token cache (thread-safe) + HMAC key derivation
+│   └── market.py            # yfinance wrappers: prices, history, dividends, top movers + global TTL caches
+├── services/
+│   └── profile.py           # Portfolio computation, alert checks, alert management
+└── tests/
+    ├── test_audit.py        # Audit log format tests (4)
+    ├── test_trading.py      # Trade validation + execution tests (17)
+    └── test_security.py     # Negative security tests (25)
 ```
 
 ## Data Flow
 ```
-Browser ←→ NiceGUI server ←→ Google OAuth (login)
-                           ←→ Yahoo Finance (prices, history, movers, macro indicators)
-                           ←→ Finnhub (stock news)
-                           ←→ Google Cloud Storage (profiles, standings)
+Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validation
+                            ←→ Yahoo Finance (prices, history, movers, macro indicators)
+                            ←→ Finnhub (stock news)
+                            ←→ Google Cloud Storage (profiles, standings) — HMAC-derived blob keys
 ```
 
 ## Auth Flow
-1. `/login` redirects user to Google OAuth consent screen
-2. Google redirects to `/callback?code=...`
-3. `exchange_code()` trades code for tokens, fetches user info (name, email)
-4. User info stored in `app.storage.user` (NiceGUI encrypted session cookie)
-5. `is_teacher(email)` checks if email matches `rpiana@stjohnsguam.com`
+1. `/` detects unauthenticated session → generates OAuth URL with state + code_verifier
+2. User redirected to Google OAuth consent screen
+3. Google redirects to `/callback?code=...&state=...`
+4. `callback_route()` validates state match, enforces rate limit (5 req/min/IP)
+5. `exchange_code()` trades code for tokens, fetches user info, validates `hd` against `GOOGLE_HD`
+6. Opaque `secrets.token_urlsafe(32)` created; session data stored in `_session_store[token]`
+7. Only the token survives in `app.storage.user` (on-disk JSON); all other session fields stripped
+8. `is_teacher(email)` checks if email matches a comma-separated list in `TEACHER_EMAILS`
+
+## Session Store
+- **In-memory dict** `_session_store: dict[str, dict]` — keyed by opaque token, process-local
+- **Token only on disk** — `app.storage.user["_token"]` is the sole session artifact written to NiceGUI's encrypted JSON storage
+- **`_session_lock`** — `threading.Lock()` protects all reads/writes to `_session_store`
+- **Helper functions:**
+  - `_get_session(key, default)` — reads a field from the current token's session
+  - `_touch_session()` — updates `last_activity` timestamp on user action (trade, alert, periodic tick)
+  - `_clear_session()` — removes token entry from `_session_store`
+- **Session timeout** — `_check_session_timeout()` runs on page load; clears session if `last_activity` > 30 min
+- **Ephemeral** — lost on instance recycle (no `min-instances`), forces re-auth on cold start
 
 ## Persistence
-- Each student has a **profile dict** in GCS at `students/{email}.json`
+- Each student has a **profile dict** in GCS at `students/{hmac_key(email)}.json`
+- Blob keys derived via HMAC-SHA-256 (`_safe_email_key()`) — prevents directory traversal, masks PII
+- GCS token cache protected by `_token_lock` to prevent TOCTOU race conditions
 - Fields: `name`, `cash`, `holdings`, `history`, `alerts`, `unsettled_cash`, `dividend_tracker`, etc.
 - All monetary values stored as **integer cents** — converted at read boundary via `_portfolio()` `/ 100.0`
-- Holding price lookups in `_portfolio()` parallelized via `ThreadPoolExecutor` (up to 8 workers)
-- Standings/admin loaders batch all unique tickers across students and fetch prices in parallel, then use a `price_map` dict for O(1) lookups — eliminating N×M sequential yfinance calls
+- Holding price lookups in `_portfolio()` reuse `p["prices"]` from `_portfolio()` — avoiding 2N sequential yfinance calls (main-thread rendering bottleneck)
+- Standings/admin loaders batch all unique tickers across students and fetch prices in parallel, then use a `price_map` dict for O(1) lookups
 - `load_student_profile(email)` → dict (cached in `_profiles` dict, auto-migrated via `_migrate_profile()`)
 - `save_student_profile(email, dict)` → writes to GCS + updates cache
 - `get_gcs_database()` → all student profiles (for standings/admin)
@@ -73,15 +98,20 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 - **All timers created at main-page level** (not inside refreshable functions or tab panels) to prevent "parent slot deleted" RuntimeError
 - **yfinance timeouts** set to 3-15s across all calls; errors silently caught
 - **All monetary values stored as integer cents** — `_cents()` converts float→int, `_fmt()` formats cents→`$X.XX` string. `_migrate_profile()` converts old float-dollar profiles on first load.
+- **In-memory session store** instead of on-disk session files — avoids modifying NiceGUI internal storage, survives across requests with Cloud Run session affinity
+- **HMAC key derivation falls back to SHA-256** when `BLOB_KEY_SECRET` is unset — existing GCS blobs remain readable; one-way migration script not required immediately
+- **Negative security tests** (25 tests in `tests/test_security.py`) cover rate limit, session integrity, balance invariant, OAuth state mismatch, teacher access control, and HMAC key store
 
-## Performance
+## Performance & Download Bottleneck Fixes
 - **Lazy-load pattern**: expensive yfinance calls fire via `async` `ui.timer(once=True)` callbacks that use `asyncio.run_in_executor(ThreadPoolExecutor)` to avoid blocking the event loop
 - **Initial page load returns in < 1s** (shell HTML + "Loading..." placeholders)
 - **Data populates 0.1s later** when background timers fire
 - **Server stays responsive** during yfinance fetches (thread-pool offload)
-- **Cache warmup** (`warm_price_cache`) preloads user holdings in a background thread at page load
-- **Movers cache pre-fill**: `get_top_movers(ALL_TICKERS)` fired on login via background thread so the 30-min cache is ready before the page renders
-- **TTLCache** on all yfinance calls: 600s for prices, 600s for history, 1800s for movers, 86400s for dividends
+- **Pie chart price reuse**: Pie charts use `p["prices"]` from `_portfolio()` instead of calling `fetch_stock_market_data()` for each holding — eliminating 2N main-thread yfinance calls per render
+- **Mover pre-warm alignment**: `_prewarm_movers()` uses the same ticker batching (stock_groups + ETFs) as `_load_movers()` so cache keys align — no duplicate downloads
+- **Cache warmup offloaded**: `warm_price_cache` runs via `.submit(warm_price_cache, ...)` on the global executor instead of blocking page render
+- **Global executor**: `_executor = ThreadPoolExecutor(max_workers=4)` replaces ad-hoc fire-and-forget executors, reducing thread creation churn
+- **TTLCache** on all yfinance calls: 600s for prices (maxsize 2048), 600s for history, 1800s for movers (maxsize 128), 86400s for dividends
 
 ## Tabs
 | Tab | Content |
@@ -95,11 +125,11 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login)
 | Teacher Admin | Class Portfolio Data table with Remove Student button + Sandbox JSON viewer (teacher only) |
 
 ## Market Data (utils/market.py)
-- **`fetch_stock_market_data(ticker)`** — live price + company name (cached 600s)
+- **`fetch_stock_market_data(ticker)`** — live price + company name (cached 600s, maxsize 2048)
 - **`fetch_full_history(ticker, period)`** — OHLCV history via yfinance (cached 600s)
-- **`get_top_movers(tickers)`** — top gainers/losers by % change (cached 1800s, pre-filled at login)
+- **`get_top_movers(tickers)`** — top gainers/losers by % change (cached 1800s, maxsize 128)
 - **`get_dividends(ticker)`** — dividend history (cached 86400s)
-- **`warm_price_cache(tickers)`** — preloads prices via ThreadPoolExecutor
+- **`warm_price_cache(tickers)`** — preloads prices via global `ThreadPoolExecutor(max_workers=4)`
 
 All calls wrapped with `TTLCache`; errors caught and silently handled.
 
@@ -135,7 +165,7 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 
 All blocking callbacks are `async` functions that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. Internal parallelism:
 
-- `_fetch_macro()` uses `ThreadPoolExecutor(max_workers=5)` to fetch VIX, 3 FRED series, and DXY **concurrently** instead of sequentially. Results cached globally (`_MACRO_CACHE`, 290s TTL) so concurrent page loads share one fetch.
+- `_fetch_macro()` uses `ThreadPoolExecutor(max_workers=5)` to fetch VIX, 3 FRED series, and DXY concurrently instead of sequentially. Results cached globally (`_MACRO_CACHE`, 290s TTL).
 - `_load_standings()` and `_load_admin()` batch all unique tickers across all student profiles, fetch prices in parallel, then use a `price_map` dict for O(1) lookups — eliminating N×M sequential yfinance calls.
 
 ## Refreshable Sections
@@ -163,6 +193,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip install urllib3==1.26.20
 python main.py  # → http://localhost:8080
 ```
@@ -172,7 +203,17 @@ Note: `ui.run()` uses `reload=False` to avoid watchfiles interference during act
 OAuth requires both `client_secret.json` and `math-finance-simulator-51d674093aa1.json` in the project root (gitignored).
 Set `REDIRECT_URI=http://localhost:8080/callback` env var for local OAuth to work.
 
+## Running Tests
+```bash
+TEACHER_EMAILS="rpiana@stjohnsguam.com" GOOGLE_HD="stjohnsguam.com" \
+  BLOB_KEY_SECRET="test-secret" python3 -m pytest tests/ -v
+```
+
+Requires `requirements-dev.txt` for `pytest`.
+
 ## Deployment
+
+### Manual
 ```bash
 # Build container image
 gcloud builds submit --tag gcr.io/math-finance-simulator/app
@@ -181,16 +222,34 @@ gcloud builds submit --tag gcr.io/math-finance-simulator/app
 gcloud run deploy math-finance-simulator \
   --image gcr.io/math-finance-simulator/app \
   --region us-east1 --allow-unauthenticated \
-  --memory 512Mi --timeout 300 \
-  --update-env-vars FINNHUB_API_KEY=your_key_here
+  --memory 512Mi --timeout 600 --session-affinity \
+  --update-env-vars FINNHUB_API_KEY=your_key_here,GOOGLE_HD=your.school.edu,BLOB_KEY_SECRET=your_secret_here,REDIRECT_URI=https://your-service-xxxxxxxxxx-ue.a.run.app/callback
 ```
 
-Required environment variables (set via `--env-vars-file` on first deploy, or `--update-env-vars` for single var updates):
-- `STORAGE_SECRET` — encryption key for profile data
-- `GOOGLE_CLIENT_SECRET` — full OAuth client JSON
-- `GCS_SERVICE_ACCOUNT` — full GCS service account JSON
-- `FINNHUB_API_KEY` — Finnhub API key (for news section)
-- `REDIRECT_URI` — (optional) overrides auto-detected callback URL
+### Auto-deploy (Cloud Build Trigger)
+A `cloudbuild.yaml` is included in the repo. To enable auto-deploy on `git push` to `main`:
+
+1. Go to [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers?project=math-finance-simulator)
+2. Click "Connect Repository" → "GitHub"
+3. Install the Google Cloud Build GitHub App for `rpiana133/math_finance_simulator`
+4. Select the repo, create a push trigger:
+   - **Name**: `deploy-to-cloud-run`
+   - **Event**: Push to branch — `^main$`
+   - **Config**: `cloudbuild.yaml` (repo root)
+5. The trigger preserves existing Cloud Run env vars (no `--update-env-vars` in the build config — env vars set via Cloud Console or initial manual deploy are retained).
+```
+
+Required environment variables:
+| Variable | Source | Purpose |
+|----------|--------|---------|
+| `STORAGE_SECRET` | Secret Manager | Encryption key for profile data |
+| `GOOGLE_CLIENT_SECRET` | Secret Manager | Full OAuth client JSON |
+| `GCS_SERVICE_ACCOUNT` | Secret Manager | Full GCS service account JSON |
+| `BLOB_KEY_SECRET` | Secret Manager | HMAC key for GCS blob path derivation |
+| `FINNHUB_API_KEY` | Plain env | Finnhub API key (for news section) |
+| `TEACHER_EMAILS` | Plain env | Comma-separated teacher emails for admin access |
+| `GOOGLE_HD` | Plain env | Google Workspace domain to restrict logins |
+| `REDIRECT_URI` | Plain env | (Optional) overrides auto-detected OAuth callback URL |
 
 OAuth redirect URIs must include both `http://localhost:8080/callback` and `https://*.run.app/callback` in Google Cloud Console.
 

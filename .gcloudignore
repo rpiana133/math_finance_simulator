@@ -9,6 +9,10 @@ __pycache__/
 .env.yaml
 .env
 .nicegui/
+.ruff_cache/
+.pytest_cache/
 assets/
 *.md
 *.json
+*.tgz
+*.tar.gz

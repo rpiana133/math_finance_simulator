@@ -1,6 +1,8 @@
 client_secret.json
 *.json
+.env.yaml
 __pycache__/
 *.pyc
 .DS_Store
 .streamlit/secrets.toml
+venv/

@@ -1,0 +1,48 @@
+# Cloud Build Trigger Configuration
+# To enable auto-deploy on git push to main:
+#
+# 1. Go to https://console.cloud.google.com/cloud-build/triggers?project=math-finance-simulator
+# 2. Click "Connect Repository" → "GitHub"
+# 3. Install the Google Cloud Build GitHub App for rpiana133/math_finance_simulator
+# 4. Select the repo and create a push trigger:
+#    - Name: deploy-to-cloud-run
+#    - Event: Push to branch
+#    - Branch: ^main$
+#    - Configuration: Cloud Build configuration file (cloudbuild.yaml)
+#    - Location: Repository
+#
+# After setup, every `git push origin main` triggers:
+#   docker build → gcloud run deploy
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: docker
+    args:
+      - build
+      - -t
+      - us-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/math-finance-simulator:$COMMIT_SHA
+      - .
+      - --platform=linux/amd64
+
+  - id: deploy
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - math-finance-simulator
+      - --image
+      - us-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/math-finance-simulator:$COMMIT_SHA
+      - --region=us-east1
+      - --allow-unauthenticated
+      - --session-affinity
+      - --timeout=600
+      - --memory=512Mi
+      - --set-env-vars=FINNHUB_API_KEY=d8p8qkpr01qp954vuvfgd8p8qkpr01qp954vuvg0,TEACHER_EMAILS=rpiana@stjohnsguam.com,GOOGLE_HD=stjohnsguam.com,REDIRECT_URI=https://math-finance-simulator-743218768808.us-east1.run.app/callback
+      - --set-secrets=STORAGE_SECRET=STORAGE_SECRET:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GCS_SERVICE_ACCOUNT=GCS_SERVICE_ACCOUNT:latest,BLOB_KEY_SECRET=BLOB_KEY_SECRET:latest
+
+timeout: 600s
+
+options:
+  logging: CLOUD_LOGGING_ONLY

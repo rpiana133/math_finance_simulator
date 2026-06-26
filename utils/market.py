@@ -1,10 +1,14 @@
-import yfinance as yf
+from __future__ import annotations
+
+from typing import Any
+
 import pandas as pd
+import yfinance as yf
 from cachetools import TTLCache
 
-_cache_600 = TTLCache(maxsize=128, ttl=600)
+_cache_600 = TTLCache(maxsize=2048, ttl=600)
 _cache_86400 = TTLCache(maxsize=64, ttl=86400)
-_cache_1800 = TTLCache(maxsize=4, ttl=1800)
+_cache_1800 = TTLCache(maxsize=128, ttl=1800)
 
 POPULAR_STOCKS = {
     "MMM": "3M",
@@ -568,16 +572,34 @@ POPULAR_STOCKS = {
 }
 
 POPULAR_ETFS = {
-    "SPY": "S&P 500 ETF", "QQQ": "Nasdaq 100 ETF", "IWM": "Russell 2000 ETF",
-    "DIA": "Dow Jones ETF", "VTI": "Total Stock Market ETF",
-    "VOO": "S&P 500 ETF (Vanguard)", "BND": "Total Bond Market ETF",
-    "GLD": "Gold ETF", "SLV": "Silver ETF", "EEM": "Emerging Markets ETF",
-    "XLF": "Financial Sector ETF", "XLK": "Tech Sector ETF",
-    "XLV": "Healthcare Sector ETF", "XLE": "Energy Sector ETF",
-    "SCHD": "Dividend Equity ETF", "VIG": "Dividend Appreciation ETF",
-    "VYM": "High Dividend Yield ETF", "DGRO": "Dividend Growth ETF",
-    "SPYD": "S&P 500 High Dividend ETF", "NOBL": "Dividend Aristocrats ETF",
-    "SDY": "S&P Dividend ETF", "DVY": "Select Dividend ETF",
+    "SPY": "S&P 500 ETF",
+    "QQQ": "Nasdaq 100 ETF",
+    "IWM": "Russell 2000 ETF",
+    "DIA": "Dow Jones ETF",
+    "VTI": "Total Stock Market ETF",
+    "VOO": "S&P 500 ETF (Vanguard)",
+    "BND": "Total Bond Market ETF",
+    "GLD": "Gold ETF",
+    "IAU": "iShares Gold Trust",
+    "SGOL": "Aberdeen Physical Gold Shares",
+    "BAR": "GraniteShares Gold Trust",
+    "PHYS": "Sprott Physical Gold Trust",
+    "GDX": "VanEck Gold Miners ETF",
+    "GDXJ": "VanEck Junior Gold Miners ETF",
+    "SLV": "Silver ETF",
+    "EEM": "Emerging Markets ETF",
+    "XLF": "Financial Sector ETF",
+    "XLK": "Tech Sector ETF",
+    "XLV": "Healthcare Sector ETF",
+    "XLE": "Energy Sector ETF",
+    "SCHD": "Dividend Equity ETF",
+    "VIG": "Dividend Appreciation ETF",
+    "VYM": "High Dividend Yield ETF",
+    "DGRO": "Dividend Growth ETF",
+    "SPYD": "S&P 500 High Dividend ETF",
+    "NOBL": "Dividend Aristocrats ETF",
+    "SDY": "S&P Dividend ETF",
+    "DVY": "Select Dividend ETF",
     "BOTZ": "Global X Robotics & AI ETF",
     "AIQ": "Global X AI & Tech ETF",
     "ROBT": "First Trust Nasdaq AI & Robotics ETF",
@@ -647,57 +669,79 @@ STOCK_TICKERS = list(POPULAR_STOCKS.keys())
 ETF_TICKERS = list(POPULAR_ETFS.keys())
 ALL_TICKERS = sorted(STOCK_TICKERS + ETF_TICKERS)
 
-def _lookup_name(ticker):
+
+def _lookup_name(ticker: str) -> str | None:
     return POPULAR_STOCKS.get(ticker) or POPULAR_ETFS.get(ticker)
 
-def get_company_name(ticker):
+
+def get_company_name(ticker: str) -> str:
     return _lookup_name(ticker) or ticker
 
-def format_ticker_option(ticker):
+
+def format_ticker_option(ticker: str) -> str:
     name = _lookup_name(ticker)
     if name:
         return f"{ticker} — {name}"
     return ticker
 
-_price_source = {}
-def get_price_source(ticker):
+
+_price_source: dict[str, str] = {}
+
+
+def get_price_source(ticker: str) -> str | None:
     return _price_source.get(ticker)
 
-def parse_ticker_option(display_str):
+
+def parse_ticker_option(display_str: str) -> str:
     return display_str.split(" —")[0].strip()
 
+
 CHART_PERIODS = {
-    "1d": "1 Day", "5d": "5 Days", "1mo": "1 Month", "3mo": "3 Months",
-    "6mo": "6 Months", "1y": "1 Year", "5y": "5 Years", "max": "Max"
+    "1d": "1 Day",
+    "5d": "5 Days",
+    "1mo": "1 Month",
+    "3mo": "3 Months",
+    "6mo": "6 Months",
+    "1y": "1 Year",
+    "5y": "5 Years",
+    "max": "Max",
 }
 
-def _flatten_cols(df):
+
+def _flatten_cols(df: pd.DataFrame | None) -> pd.DataFrame | None:
     if df is not None and isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
 
-def _cached(key, cache, func, *args):
+
+def _cached(key: str, cache: TTLCache, func, *args) -> Any:
     if key in cache:
         return cache[key]
     result = func(*args)
     cache[key] = result
     return result
 
-def fetch_stock_market_data(ticker):
+
+def fetch_stock_market_data(ticker: str) -> tuple[float | None, Any, str | None]:
     return _cached(f"price_{ticker}", _cache_600, _fetch_stock_market_data_impl, ticker)
 
-def fetch_full_history(ticker, period="3mo"):
-    return _cached(f"hist_{ticker}_{period}", _cache_600, _fetch_full_history_impl, ticker, period)
 
-def get_dividends(ticker):
+def fetch_full_history(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
+    return _cached(
+        f"hist_{ticker}_{period}", _cache_600, _fetch_full_history_impl, ticker, period
+    )
+
+
+def get_dividends(ticker: str) -> pd.Series | None:
     return _cached(f"div_{ticker}", _cache_86400, _get_dividends_impl, ticker)
 
-def _fetch_current_price(ticker):
+
+def _fetch_current_price(ticker: str) -> float | None:
     try:
         t = yf.Ticker(ticker)
         fi = t.fast_info
-        if fi.get('marketState', '') == 'REGULAR':
-            for key in ('lastPrice', 'regularMarketPrice', 'previousClose'):
+        if fi.get("marketState", "") == "REGULAR":
+            for key in ("lastPrice", "regularMarketPrice", "previousClose"):
                 v = fi.get(key)
                 if v is not None:
                     return float(v)
@@ -705,82 +749,92 @@ def _fetch_current_price(ticker):
         pass
     return None
 
-def _fetch_stock_market_data_impl(ticker):
+
+def _fetch_stock_market_data_impl(ticker: str) -> tuple[float | None, Any, str | None]:
     try:
         company_name = get_company_name(ticker)
         current = _fetch_current_price(ticker)
         if current is not None:
-            _price_source[ticker] = 'live'
+            _price_source[ticker] = "live"
             return current, None, company_name
         data = None
         for period in ("5d", "1mo", "6mo"):
-            data = _flatten_cols(yf.download(ticker, period=period, progress=False, timeout=15))
+            data = _flatten_cols(
+                yf.download(ticker, period=period, progress=False, timeout=15)
+            )
             if data is not None and not data.empty:
                 break
         if data is None or data.empty:
             return None, None, None
-        close_series = data['Close'].squeeze().dropna()
+        close_series = data["Close"].squeeze().dropna()
         if close_series.empty:
             return None, None, None
         close_price = float(close_series.iloc[-1])
-        _price_source[ticker] = 'close'
+        _price_source[ticker] = "close"
         return close_price, None, company_name
     except Exception:
         return None, None, None
 
-def warm_price_cache(tickers):
+
+def warm_price_cache(tickers: list[str]) -> None:
     # Filter out tickers that are already cached to avoid redundant network calls
     uncached = [t for t in tickers if f"price_{t}" not in _cache_600]
     if not uncached:
         return
-    
+
     # Try current price per ticker first
     remaining = []
     for t in uncached:
         p = _fetch_current_price(t)
         if p is not None:
             _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
-            _price_source[t] = 'live'
+            _price_source[t] = "live"
         else:
             remaining.append(t)
     if not remaining:
         return
-    
+
     try:
         # Download remaining tickers in a single batch
-        data = _flatten_cols(yf.download(" ".join(remaining), period="5d", progress=False, timeout=3))
+        data = _flatten_cols(
+            yf.download(" ".join(remaining), period="5d", progress=False, timeout=3)
+        )
         if data.empty:
             return
-        
+
         # Loop through each ticker and extract its latest price
         for t in remaining:
             try:
                 if len(remaining) == 1:
-                    close_df = data['Close']
+                    close_df = data["Close"]
                 else:
-                    close_df = data['Close'][t]
-                
+                    close_df = data["Close"][t]
+
                 close_series = close_df.squeeze()
                 valid_closes = close_series.dropna()
                 if not valid_closes.empty:
                     price = float(valid_closes.iloc[-1])
                     _cache_600[f"price_{t}"] = (price, None, get_company_name(t))
-                    _price_source[t] = 'close'
+                    _price_source[t] = "close"
             except Exception:
                 continue
     except Exception:
         pass
 
-def _fetch_full_history_impl(ticker, period="3mo"):
+
+def _fetch_full_history_impl(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
     try:
-        data = _flatten_cols(yf.download(ticker, period=period, progress=False, timeout=10))
+        data = _flatten_cols(
+            yf.download(ticker, period=period, progress=False, timeout=10)
+        )
         if data.empty:
             return None
         return data
     except Exception:
         return None
 
-def _get_dividends_impl(ticker):
+
+def _get_dividends_impl(ticker: str) -> pd.Series | None:
     try:
         t = yf.Ticker(ticker)
         divs = t.dividends
@@ -790,19 +844,25 @@ def _get_dividends_impl(ticker):
     except Exception:
         return None
 
-def get_top_movers(tickers):
+
+def get_top_movers(
+    tickers: list[str] | tuple[str, ...],
+) -> list[tuple[str, str, float, float]]:
     key = f"movers_{hash(tuple(tickers))}"
     return _cached(key, _cache_1800, _get_top_movers_impl, tickers)
 
-def _get_top_movers_impl(tickers, max_batch=50):
+
+def _get_top_movers_impl(
+    tickers: list[str] | tuple[str, ...], max_batch: int = 50
+) -> list[tuple[str, str, float, float]]:
     all_results = []
     for i in range(0, len(tickers), max_batch):
-        batch = tickers[i:i + max_batch]
+        batch = tickers[i : i + max_batch]
         try:
             data = yf.download(" ".join(batch), period="5d", progress=False, timeout=3)
             if data.empty:
                 continue
-            close_df = data['Close']
+            close_df = data["Close"]
             if len(close_df) >= 2:
                 pct = close_df.pct_change().iloc[-1] * 100
                 latest = close_df.iloc[-1]
@@ -811,8 +871,14 @@ def _get_top_movers_impl(tickers, max_batch=50):
                 latest = close_df.iloc[-1]
             for ticker in batch:
                 if ticker in latest.index and not pd.isna(latest[ticker]):
-                    all_results.append((ticker, get_company_name(ticker),
-                                        float(latest[ticker]), float(pct.get(ticker, 0.0))))
+                    all_results.append(
+                        (
+                            ticker,
+                            get_company_name(ticker),
+                            float(latest[ticker]),
+                            float(pct.get(ticker, 0.0)),
+                        )
+                    )
         except Exception:
             continue
     all_results.sort(key=lambda x: x[3], reverse=True)
