@@ -716,9 +716,6 @@ def main_page():
     except Exception as e:
         logger.error(f"Error warming price cache: {e}")
 
-    profile = _process_settlement(email, profile)
-    deposit_amt, deposit_weeks = _process_weekly(email, profile)
-
     # ── Top Bar ──
     ui.html(
         f"""
@@ -768,18 +765,16 @@ def main_page():
     summary()
     ui.timer(0.1, _load_summary, once=True)
 
-    # Deposit audit (sync, instant)
-    if deposit_amt:
-        _audit("DEPOSIT", email, {"amount_cents": deposit_amt, "weeks": deposit_weeks})
-
-    # Refreshable banners — deposit shown immediately, alerts appear when ready
+    # Refreshable banners — deposit shown after async processing, alerts appear when ready
     _alert_msgs: list[str] = []
+    _deposit_state: dict = {"amt": None, "weeks": 0}
 
     @ui.refreshable
     def banner_area():
-        if deposit_amt:
+        da = _deposit_state["amt"]
+        if da:
             ui.html(
-                f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>',
+                f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(da)} ({_deposit_state["weeks"]} week{"s" if _deposit_state["weeks"] > 1 else ""})</div>',
                 sanitize=False,
             )
         for msg in _alert_msgs:
@@ -787,14 +782,26 @@ def main_page():
 
     banner_area()
 
-    async def _dividends_alerts_worker():
-        loop = asyncio.get_event_loop()
-        p = await loop.run_in_executor(None, _process_dividends, email, profile)
-        triggered = await loop.run_in_executor(None, _check_alerts, p)
-        _alert_msgs[:] = triggered
-        banner_area.refresh()
+    async def _finish_processing():
+        try:
+            loop = asyncio.get_event_loop()
+            p = await loop.run_in_executor(None, _process_dividends, email, profile)
+            deposit_amt, deposit_weeks = await loop.run_in_executor(
+                None, _process_weekly, email, p
+            )
+            p = await loop.run_in_executor(None, _process_settlement, email, p)
+            await loop.run_in_executor(None, _save, email, p)
+            triggered = await loop.run_in_executor(None, _check_alerts, p)
+            _alert_msgs[:] = triggered
+            if deposit_amt:
+                _deposit_state["amt"] = deposit_amt
+                _deposit_state["weeks"] = deposit_weeks
+                _audit("DEPOSIT", email, {"amount_cents": deposit_amt, "weeks": deposit_weeks})
+            banner_area.refresh()
+        except Exception as e:
+            logger.error(f"Finish processing error: {e}", exc_info=True)
 
-    ui.timer(0, _dividends_alerts_worker, once=True)
+    ui.timer(0, _finish_processing, once=True)
 
     # ── Macro Indicators ──
     _macro_state: dict = {"data": None}
@@ -1494,7 +1501,7 @@ def main_page():
                     chart_price = ui.label().classes("text-3xl font-bold")
                     chart_sub = ui.label().classes("text-sm text-muted")
                     ui.html(
-                        '<div id="tvchart" style="width:100%;height:380px;position:relative;overflow:hidden;box-sizing:border-box"></div>',
+                        '<div id="tvchart" style="width:100%;height:380px;min-height:400px;position:relative;overflow:hidden;box-sizing:border-box"></div>',
                         sanitize=False,
                     )
 
@@ -1532,7 +1539,7 @@ def main_page():
                             for idx, row in hist.iterrows():
                                 data.append(
                                     {
-                                        "time": int(idx.timestamp()),
+                                        "time": idx.strftime('%Y-%m-%d'),
                                         "open": float(row["Open"]),
                                         "high": float(row["High"]),
                                         "low": float(row["Low"]),
