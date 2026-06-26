@@ -47,6 +47,7 @@ from utils.market import (
     ETF_TICKERS,
     STOCK_TICKERS,
     _flatten_cols,
+    fetch_full_history,
     fetch_stock_market_data,
     format_ticker_option,
     get_price_source,
@@ -469,6 +470,7 @@ async def callback_route(code: str, request: Request, state: str = None):
         for k in ("authenticated", "email", "name", "ip", "last_activity"):
             app.storage.user.pop(k, None)
         _audit("LOGIN", user_info["email"], ip=client_ip)
+        _executor.submit(_get, user_info["email"])
         return RedirectResponse("/")
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
@@ -1499,19 +1501,14 @@ def main_page():
                     async def _chart_worker(t, period, style):
                         try:
                             loop = asyncio.get_event_loop()
-                            pr, _, company = await loop.run_in_executor(
-                                None, fetch_stock_market_data, t
+                            price_data, hist = await asyncio.gather(
+                                loop.run_in_executor(None, fetch_stock_market_data, t),
+                                loop.run_in_executor(None, fetch_full_history, t, period),
                             )
+                            pr = price_data[0] if price_data else None
+                            company = price_data[2] if price_data else ""
                             chart_price.set_text(f"${pr:.2f}" if pr else "")
                             chart_sub.set_text(company if pr else "")
-                            hist = await loop.run_in_executor(
-                                None,
-                                lambda: _flatten_cols(
-                                    yf.download(
-                                        t, period=period, progress=False, timeout=20
-                                    )
-                                ),
-                            )
                             if hist is None or len(hist) < 2:
                                 logger.error(
                                     f"Chart: not enough history for {t} (period={period}, rows={len(hist) if hist is not None else 'None'})"
@@ -1755,8 +1752,8 @@ def main_page():
                                 } catch(e) { setTimeout(initTv, 200); }
                             })();
                         }
-                    """) if tab == tr else None,
-                    _chart() if tab == tr and vs.value else None,
+                    """) if tab == tr.value else None,
+                    _chart() if tab == tr.value and vs.value else None,
                 ))
 
         # ── ALERTS ──
