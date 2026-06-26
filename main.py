@@ -174,7 +174,7 @@ _callback_rates = TTLCache(maxsize=10000, ttl=60)
 
 
 _MACRO_CACHE = {"ts": 0, "data": None}
-_MACRO_TTL = 290
+_MACRO_TTL = 86400
 
 
 def _fetch_macro() -> dict:
@@ -249,8 +249,12 @@ def _fetch_macro() -> dict:
                 result[r[2]] = r[3]
         except Exception:
             pass
-    _MACRO_CACHE["ts"] = now.timestamp()
-    _MACRO_CACHE["data"] = result
+    if result and len(result) >= 3:
+        _MACRO_CACHE["ts"] = now.timestamp()
+        _MACRO_CACHE["data"] = result
+        return result
+    if _MACRO_CACHE["data"] is not None:
+        return _MACRO_CACHE["data"]
     return result
 
 
@@ -712,8 +716,6 @@ def main_page():
 
     profile = _process_settlement(email, profile)
     deposit_amt, deposit_weeks = _process_weekly(email, profile)
-    profile = _process_dividends(email, profile)
-    triggered = _check_alerts(profile)
 
     # ── Top Bar ──
     ui.html(
@@ -764,15 +766,33 @@ def main_page():
     summary()
     ui.timer(0.1, _load_summary, once=True)
 
-    # Banners
+    # Deposit audit (sync, instant)
     if deposit_amt:
         _audit("DEPOSIT", email, {"amount_cents": deposit_amt, "weeks": deposit_weeks})
-        ui.html(
-            f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>',
-            sanitize=False,
-        )
-    for msg in triggered:
-        ui.html(f'<div class="banner banner-warning">\U0001f514 {msg}</div>', sanitize=False)
+
+    # Refreshable banners — deposit shown immediately, alerts appear when ready
+    _alert_msgs: list[str] = []
+
+    @ui.refreshable
+    def banner_area():
+        if deposit_amt:
+            ui.html(
+                f'<div class="banner banner-positive">\U0001f4b0 Weekly deposit: +{_fmt(deposit_amt)} ({deposit_weeks} week{"s" if deposit_weeks > 1 else ""})</div>',
+                sanitize=False,
+            )
+        for msg in _alert_msgs:
+            ui.html(f'<div class="banner banner-warning">\U0001f514 {msg}</div>', sanitize=False)
+
+    banner_area()
+
+    async def _dividends_alerts_worker():
+        loop = asyncio.get_event_loop()
+        p = await loop.run_in_executor(None, _process_dividends, email, profile)
+        triggered = await loop.run_in_executor(None, _check_alerts, p)
+        _alert_msgs[:] = triggered
+        banner_area.refresh()
+
+    ui.timer(0, _dividends_alerts_worker, once=True)
 
     # ── Macro Indicators ──
     _macro_state: dict = {"data": None}
