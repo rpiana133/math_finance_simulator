@@ -1716,7 +1716,7 @@ def main_page():
                 vs.on_value_change(lambda: _load_news())
 
                 def _on_tab_change(e):
-                    if e.value is tr:
+                    if e.value == "\U0001f52c Research":
                         ui.run_javascript("""
                             var el = document.getElementById('tvchart');
                             if (!el) return;
@@ -1986,7 +1986,7 @@ def main_page():
                             rows.append(
                                 {
                                     "Student": p.get("name", "Unknown"),
-                                    "ID": e[:16] + "..." if len(e) > 16 else e,
+                                    "Email": p.get("email", "unknown"),
                                     "Net Worth": nw,
                                     "P&L": pl,
                                     "Return": (pl / (STARTING_CASH_CENTS / 100)) * 100,

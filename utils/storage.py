@@ -222,6 +222,7 @@ def load_student_profile(email: str) -> dict | None:
 def save_student_profile(email: str, profile: dict) -> None:
     global _profile_cache
     key = _safe_email_key(email)
+    profile["email"] = email
     try:
         payload = json.dumps(profile, indent=4)
     except Exception as e:
