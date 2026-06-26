@@ -162,7 +162,7 @@ def load_student_profile(email: str) -> dict | None:
         profile = None
         if data is not None:
             profile = json.loads(data)
-            
+
         # Check if the loaded profile is just a fresh empty placeholder
         is_fresh_empty = False
         if profile is not None:
@@ -179,7 +179,7 @@ def load_student_profile(email: str) -> dict | None:
                 fallback_data = _gcs_read(f"{key}.json")
                 if fallback_data is None:
                     fallback_data = _gcs_read(f"{email}.json")
-            
+
             if fallback_data is not None:
                 fallback_profile = json.loads(fallback_data)
                 is_fallback_fresh = (

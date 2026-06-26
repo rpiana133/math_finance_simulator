@@ -1497,7 +1497,15 @@ def main_page():
                                     f"Chart: not enough history for {t} (period={period}, rows={len(hist) if hist is not None else 'None'})"
                                 )
                                 ui.run_javascript(
-                                    "if (window.__tv) { window.__tv.candle.setData([]); window.__tv.line.setData([]); }"
+                                    """
+(function() {
+    var maxW = Date.now() + 5000, poll = function() {
+        if (window.__tv && window.__tv.ready) {
+            window.__tv.candle.setData([]); window.__tv.line.setData([]);
+        } else if (Date.now() < maxW) { setTimeout(poll, 200); }
+    }; poll();
+})();
+                                    """
                                 )
                                 return
                             logger.info(
@@ -1521,14 +1529,24 @@ def main_page():
                             line_vis = "true" if style == "Line" else "false"
                             ui.run_javascript(
                                 f"""
-if (!window.__tv) return;
-var tvEl = document.getElementById('tvchart');
-if (tvEl && tvEl.clientWidth > 0) {{ window.__tv.chart.resize(tvEl.clientWidth, tvEl.clientHeight); }}
-window.__tv.candle.setData({json.dumps(data)});
-window.__tv.line.setData({json.dumps(line_data)});
-window.__tv.candle.applyOptions({{visible: {candle_vis}}});
-window.__tv.line.applyOptions({{visible: {line_vis}}});
-window.__tv.chart.timeScale().fitContent();
+(function() {{
+    var maxWait = Date.now() + 10000, poll = function() {{
+        if (window.__tv && window.__tv.ready) {{
+            var tvEl = document.getElementById('tvchart');
+            if (tvEl && tvEl.clientWidth > 0) {{ window.__tv.chart.resize(tvEl.clientWidth, tvEl.clientHeight); }}
+            window.__tv.candle.setData({json.dumps(data)});
+            window.__tv.line.setData({json.dumps(line_data)});
+            window.__tv.candle.applyOptions({{visible: {candle_vis}}});
+            window.__tv.line.applyOptions({{visible: {line_vis}}});
+            window.__tv.chart.timeScale().fitContent();
+        }} else if (Date.now() < maxWait) {{
+            setTimeout(poll, 200);
+        }} else {{
+            console.error('Chart init timeout — __tv not ready');
+        }}
+    }};
+    poll();
+}})();
                             """
                             )
                             logger.info(
@@ -1600,13 +1618,14 @@ window.__tv.chart.timeScale().fitContent();
                         raw = await loop.run_in_executor(
                             None, lambda: yf.Ticker(t).news
                         )
-                        articles = [
-                            a
-                            for a in (raw or [])
-                            if _is_safe_article(
-                                a.get("title", ""), a.get("summary", "")
-                            )
-                        ][:5]
+                        articles = []
+                        for a in (raw or []):
+                            c = a.get("content") or {}
+                            headline = c.get("title", "")
+                            summary = c.get("summary", "")
+                            if _is_safe_article(headline, summary):
+                                articles.append(a)
+                        articles = articles[:5]
                         _news_state["articles"] = articles
                         _news_state["ticker"] = t
                         _news_container.set_text("")
@@ -1619,11 +1638,19 @@ window.__tv.chart.timeScale().fitContent();
                             return
                         with _news_container:
                             for a in articles[:5]:
-                                ts = a.get("providerPublishTime", 0)
-                                headline = html.escape(a.get("title", ""))
-                                url = a.get("link", "")
-                                source = html.escape(a.get("publisher", ""))
-                                summary = html.escape(a.get("summary", ""))
+                                c = a.get("content") or {}
+                                ts = c.get("pubDate", 0)
+                                headline = html.escape(c.get("title", ""))
+                                url = (
+                                    (c.get("clickThroughUrl") or {}).get("url", "")
+                                    or (c.get("canonicalUrl") or {}).get("url", "")
+                                )
+                                source = html.escape(
+                                    (c.get("provider") or {}).get(
+                                        "displayName", ""
+                                    )
+                                )
+                                summary = html.escape(c.get("summary", ""))
                                 with ui.card().classes("w-full q-pa-sm q-mb-sm"):
                                     with ui.row().classes("items-start gap-2"):
                                         ui.label(headline).classes(
@@ -1674,6 +1701,8 @@ window.__tv.chart.timeScale().fitContent();
                             window.__tv.chart.timeScale().fitContent();
                         } else {
                             (function initTv() {
+                                if (!initTv._max) { initTv._max = Date.now() + 10000; }
+                                if (Date.now() > initTv._max) { console.error('Chart init timeout'); return; }
                                 try {
                                     if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 200); return; }
                                     var iw = el.clientWidth || 800, ih = el.clientHeight || 380;

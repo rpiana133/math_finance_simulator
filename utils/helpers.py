@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Union
 
 STARTING_CASH_CENTS: int = 100000
 
@@ -22,7 +23,11 @@ def _fmt(cents) -> str:
     return f"{sign}${abs_c // 100:,}.{abs_c % 100:02d}"
 
 
-def _relative_time(ts: int) -> str:
+def _relative_time(ts: Union[str, int]) -> str:
+    if isinstance(ts, str):
+        ts = int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp())
+    else:
+        ts = int(ts)
     diff = int(datetime.now().timestamp()) - ts
     if diff < 60:
         return "just now"
