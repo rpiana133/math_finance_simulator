@@ -1708,53 +1708,55 @@ def main_page():
 
                 vs.on_value_change(lambda: _load_news())
 
-                tabs.on_value_change(lambda tab: (
-                    ui.run_javascript("""
-                        var el = document.getElementById('tvchart');
-                        if (!el) return;
-                        if (window.__tv && window.__tv.ready) {
-                            var w = el.clientWidth, h = el.clientHeight;
-                            if (w > 0 && h > 0) { window.__tv.chart.resize(w, h); }
-                            window.__tv.chart.timeScale().fitContent();
-                        } else {
-                            (function initTv() {
-                                if (!initTv._max) { initTv._max = Date.now() + 10000; }
-                                if (Date.now() > initTv._max) { console.error('Chart init timeout'); return; }
-                                try {
-                                    if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 200); return; }
-                                    var iw = el.clientWidth || 800, ih = el.clientHeight || 380;
-                                    var c = LightweightCharts.createChart(el, {
-                                        width: iw, height: ih,
-                                        layout: { textColor: '#1f2937', fontFamily: "'Inter',-apple-system,sans-serif", fontSize: 12 },
-                                        grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
-                                        timeScale: { borderColor: 'rgba(128,128,128,0.2)', timeVisible: false },
-                                        rightPriceScale: { borderColor: 'rgba(128,128,128,0.2)' },
-                                        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-                                        handleScroll: false, handleScale: false,
-                                    });
-                                    window.__tv = { ready: true, chart: c };
-                                    window.__tv.candle = c.addSeries(LightweightCharts.CandlestickSeries, {
-                                        upColor: '#10b981', downColor: '#f43f5e',
-                                        borderUpColor: '#10b981', borderDownColor: '#f43f5e',
-                                        wickUpColor: '#10b981', wickDownColor: '#f43f5e',
-                                        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-                                    });
-                                    window.__tv.line = c.addSeries(LightweightCharts.LineSeries, {
-                                        color: '#3b82f6', lineWidth: 2,
-                                        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-                                    });
-                                    if (window.ResizeObserver) {
-                                        new ResizeObserver(function() {
-                                            var w2 = el.clientWidth, h2 = el.clientHeight;
-                                            if (w2 > 0 && h2 > 0) { c.resize(w2, h2); }
-                                        }).observe(el);
-                                    }
-                                } catch(e) { setTimeout(initTv, 200); }
-                            })();
-                        }
-                    """) if tab == tr.value else None,
-                    _chart() if tab == tr.value and vs.value else None,
-                ))
+                def _on_tab_change(e):
+                    if e.value is tr:
+                        ui.run_javascript("""
+                            var el = document.getElementById('tvchart');
+                            if (!el) return;
+                            if (window.__tv && window.__tv.ready) {
+                                var w = el.clientWidth, h = el.clientHeight;
+                                if (w > 0 && h > 0) { window.__tv.chart.resize(w, h); }
+                                window.__tv.chart.timeScale().fitContent();
+                            } else {
+                                (function initTv() {
+                                    if (!initTv._max) { initTv._max = Date.now() + 10000; }
+                                    if (Date.now() > initTv._max) { console.error('Chart init timeout'); return; }
+                                    try {
+                                        if (typeof LightweightCharts === 'undefined') { setTimeout(initTv, 200); return; }
+                                        var iw = el.clientWidth || 800, ih = el.clientHeight || 380;
+                                        var c = LightweightCharts.createChart(el, {
+                                            width: iw, height: ih,
+                                            layout: { textColor: '#1f2937', fontFamily: "'Inter',-apple-system,sans-serif", fontSize: 12 },
+                                            grid: { vertLines: { color: 'rgba(128,128,128,0.1)' }, horzLines: { color: 'rgba(128,128,128,0.1)' } },
+                                            timeScale: { borderColor: 'rgba(128,128,128,0.2)', timeVisible: false },
+                                            rightPriceScale: { borderColor: 'rgba(128,128,128,0.2)' },
+                                            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                                            handleScroll: false, handleScale: false,
+                                        });
+                                        window.__tv = { ready: true, chart: c };
+                                        window.__tv.candle = c.addSeries(LightweightCharts.CandlestickSeries, {
+                                            upColor: '#10b981', downColor: '#f43f5e',
+                                            borderUpColor: '#10b981', borderDownColor: '#f43f5e',
+                                            wickUpColor: '#10b981', wickDownColor: '#f43f5e',
+                                            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                                        });
+                                        window.__tv.line = c.addSeries(LightweightCharts.LineSeries, {
+                                            color: '#3b82f6', lineWidth: 2,
+                                            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                                        });
+                                        if (window.ResizeObserver) {
+                                            new ResizeObserver(function() {
+                                                var w2 = el.clientWidth, h2 = el.clientHeight;
+                                                if (w2 > 0 && h2 > 0) { c.resize(w2, h2); }
+                                            }).observe(el);
+                                        }
+                                    } catch(e) { setTimeout(initTv, 200); }
+                                })();
+                            }
+                        """)
+                        if vs.value:
+                            _chart()
+                tabs.on_value_change(_on_tab_change)
 
         # ── ALERTS ──
         with ui.tab_panel(ta):
