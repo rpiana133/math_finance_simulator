@@ -210,6 +210,8 @@ def load_student_profile(email: str) -> dict | None:
                         _profiles[email] = profile
                     except Exception:
                         pass
+        if profile is not None:
+            profile["email"] = email
         return profile
     except Exception as e:
         _logger.error(f"GCS load error for {email}: {e}")

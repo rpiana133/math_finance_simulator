@@ -6,7 +6,6 @@ import io
 import json
 import logging
 import os
-import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -31,6 +30,7 @@ from services.profile import (
     _process_settlement,
     _process_weekly,
     _profile_locks,
+    _profiles,
     _save,
 )
 from utils.auth import exchange_code, get_auth_url, is_teacher
@@ -55,6 +55,7 @@ from utils.market import (
     warm_price_cache,
 )
 from utils.storage import (
+    _safe_email_key,
     delete_student_profile,
     get_gcs_database,
     load_class_settings,
@@ -64,23 +65,28 @@ from utils.storage import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-NEWS_BLOCKLIST: set[str] = {
-    "adult", "xxx", "porn", "nsfw",
-    "nude", "explicit", "escort",
-    "casino", "gambling", "betting",
+NEWS_WHITELIST: set[str] = {
+    "Reuters",
+    "Bloomberg",
+    "The Associated Press",
+    "CNBC",
+    "MarketWatch",
+    "The Wall Street Journal",
+    "Financial Times",
+    "Barron's",
+    "Yahoo Finance",
+    "Forbes",
+    "Fortune",
+    "Business Insider",
+    "Money",
+    "PR Newswire",
+    "Business Wire",
+    "GlobeNewswire",
+    "Accesswire",
+    "TechCrunch",
+    "Ars Technica",
+    "The Verge",
 }
-
-_RE_BLOCKLIST: list[re.Pattern] = [
-    re.compile(rf"\b{re.escape(w)}\b", re.IGNORECASE) for w in NEWS_BLOCKLIST
-]
-
-
-def _is_safe_article(headline: str, summary: str) -> bool:
-    text = f"{headline} {summary}"
-    for pattern in _RE_BLOCKLIST:
-        if pattern.search(text):
-            return False
-    return True
 
 
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -1645,9 +1651,8 @@ def main_page():
                         articles = []
                         for a in (raw or []):
                             c = a.get("content") or {}
-                            headline = c.get("title", "")
-                            summary = c.get("summary", "")
-                            if _is_safe_article(headline, summary):
+                            source = (c.get("provider") or {}).get("displayName", "")
+                            if source in NEWS_WHITELIST:
                                 articles.append(a)
                         articles = articles[:5]
                         _news_state["articles"] = articles
@@ -1847,7 +1852,7 @@ def main_page():
                             _standings_state["rows"] = []
                             standings_content.refresh()
                             return
-                        db.pop("rpiana@stjohnsguam.com", None)
+                        db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
                         all_tickers = set()
                         for p in db.values():
                             p = _migrate_profile(p)
@@ -1955,7 +1960,7 @@ def main_page():
                             _admin_state["rows"] = []
                             admin_table.refresh()
                             return
-                        db.pop("rpiana@stjohnsguam.com", None)
+                        db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
                         all_tickers = set()
                         for p in db.values():
                             p = _migrate_profile(p)
@@ -1972,9 +1977,15 @@ def main_page():
                             for t, pr in res:
                                 if pr is not None:
                                     price_map[t] = pr
+                        _email_by_hash = {}
+                        for ce, cp in _profiles.items():
+                            if cp:
+                                _email_by_hash[_safe_email_key(ce)] = ce
                         rows = []
                         for e, p in db.items():
                             p = _migrate_profile(p)
+                            if "email" not in p:
+                                p["email"] = _email_by_hash.get(e, "unknown")
                             mv = 0.0
                             for t, pos in p.get("holdings", {}).items():
                                 pr = price_map.get(t)
@@ -1986,7 +1997,7 @@ def main_page():
                             rows.append(
                                 {
                                     "Student": p.get("name", "Unknown"),
-                                    "Email": p.get("email", "unknown"),
+                                    "Email": p.get("email") or "unknown",
                                     "Net Worth": nw,
                                     "P&L": pl,
                                     "Return": (pl / (STARTING_CASH_CENTS / 100)) * 100,
