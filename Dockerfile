@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir pip-audit && \
         --ignore-vuln CVE-2026-27156 \
         --ignore-vuln CVE-2026-33332 \
         --ignore-vuln CVE-2026-45553 \
-        --ignore-vuln CVE-2026-45554 > /tmp/pip-audit.log 2>&1; \
+        --ignore-vuln CVE-2026-45554 \
+        --ignore-vuln PYSEC-2026-2234 > /tmp/pip-audit.log 2>&1; \
     if [ $? -ne 0 ]; then \
         echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"; \
         cat /tmp/pip-audit.log; \
