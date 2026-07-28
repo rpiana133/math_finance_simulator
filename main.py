@@ -1884,8 +1884,8 @@ def main_page():
                                     "Student": p.get("name", "Student"),
                                     "Net Worth": nw,
                                     "Return": (
-                                        (nw - (STARTING_CASH_CENTS / 100))
-                                        / (STARTING_CASH_CENTS / 100)
+                                        (nw - ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100))
+                                        / ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100)
                                     )
                                     * 100,
                                 }
@@ -1993,14 +1993,15 @@ def main_page():
                                     mv += pos["shares"] * pr
                             cash = p.get("cash", STARTING_CASH_CENTS)
                             nw = (cash / 100) + mv
-                            pl = nw - (STARTING_CASH_CENTS / 100)
+                            cap = (STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100
+                            pl = nw - cap
                             rows.append(
                                 {
                                     "Student": p.get("name", "Unknown"),
                                     "Email": p.get("email") or "unknown",
                                     "Net Worth": nw,
                                     "P&L": pl,
-                                    "Return": (pl / (STARTING_CASH_CENTS / 100)) * 100,
+                                    "Return": (pl / cap) * 100,
                                     "Cash": cash / 100,
                                     "Stock Value": mv,
                                     "Trades": len(p.get("history", [])),
