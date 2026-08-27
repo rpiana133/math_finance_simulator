@@ -57,6 +57,7 @@ from utils.market import (
 from utils.storage import (
     _safe_email_key,
     delete_student_profile,
+    delete_student_profile_by_key,
     get_gcs_database,
     load_class_settings,
     save_class_settings,
@@ -89,9 +90,11 @@ NEWS_WHITELIST: set[str] = {
 }
 
 
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=16)
 _session_store: dict[str, dict] = {}
 _session_lock = Lock()
+_movers_cache: dict = {"data": [], "loaded": False, "ts": 0.0, "loading": False}
+_MOVERS_TTL = 300.0
 
 
 def _touch_session():
@@ -238,12 +241,11 @@ def _fetch_macro() -> dict:
         except Exception:
             return key, "N/A", f"{key}_color", ""
 
-    with ThreadPoolExecutor(max_workers=5) as ex:
-        futs = [ex.submit(_vix), ex.submit(_dxy)]
-        futs += [
-            ex.submit(_fred, k, s)
-            for k, s in [("cpi", "CPIAUCNS"), ("ppi", "PPIFID"), ("pce", "PCEPI")]
-        ]
+    futs = [_executor.submit(_vix), _executor.submit(_dxy)]
+    futs += [
+        _executor.submit(_fred, k, s)
+        for k, s in [("cpi", "CPIAUCNS"), ("ppi", "PPIFID"), ("pce", "PCEPI")]
+    ]
     result = {}
     for f in futs:
         try:
@@ -658,7 +660,7 @@ def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
 
 # ── Main page ────────────────────────────────────────────
 @ui.page("/")
-def main_page():
+async def main_page():
     now = datetime.utcnow().timestamp()
     last_activity = _get_session("last_activity")
     if last_activity and now - last_activity > 1800:
@@ -691,7 +693,8 @@ def main_page():
     _touch_session()
     email = _get_session("email")
     name = _get_session("name", "Student")
-    profile = _get(email)
+    loop = asyncio.get_event_loop()
+    profile = await loop.run_in_executor(_executor, _get, email)
     if profile is None:
         profile = {
             "name": name,
@@ -717,8 +720,10 @@ def main_page():
             tickers_to_warm.add(a["ticker"])
         if tickers_to_warm:
             _executor.submit(warm_price_cache, list(tickers_to_warm))
-        # Pre-fill market movers 30-min cache so the movers section loads instantly
-        _executor.submit(_prewarm_movers)
+        # Pre-fill market movers cache — only if not already loaded
+        if not _movers_cache["loaded"] and not _movers_cache["loading"]:
+            _movers_cache["loading"] = True
+            _executor.submit(_prewarm_movers)
     except Exception as e:
         logger.error(f"Error warming price cache: {e}")
 
@@ -756,7 +761,9 @@ def main_page():
         pl_str = f"{sign}${p['pl']:,.2f} ({p['pl_pct']:+.2f}%)"
         items_html = (
             f'<div class="metric-box"><div class="label">Cash Balance</div><div class="value">${p["cash"]:,.2f}</div></div>'
-            f'<div class="metric-box"><div class="label">Unsettled Cash</div><div class="value text-warning">${p["unsettled"]:,.2f}</div></div>'
+            f'<div class="metric-box"><div class="label">Unsettled Cash</div><div class="value text-warning">${p["unsettled"]:,.2f}</div>'
+            + (f'<div class="sub text-muted" style="font-size:0.7em">Available after market close</div>' if p["unsettled"] > 0 else '')
+            + '</div>'
             f'<div class="metric-box"><div class="label">Invested</div><div class="value">${p["total_hold"]:,.2f}</div><div class="sub {cls}">{pl_str}</div></div>'
             f'<div class="metric-box"><div class="label">Dividends</div><div class="value text-positive">{_fmt(profile.get("total_dividends_earned", 0))}</div></div>'
             f'<div class="metric-box"><div class="label">Total Account</div><div class="value">${p["total"]:,.2f}</div></div>'
@@ -765,7 +772,7 @@ def main_page():
 
     async def _load_summary():
         loop = asyncio.get_event_loop()
-        _summary_state["data"] = await loop.run_in_executor(None, _portfolio, profile)
+        _summary_state["data"] = await loop.run_in_executor(_executor, _portfolio, profile)
         summary.refresh()
 
     summary()
@@ -791,13 +798,13 @@ def main_page():
     async def _finish_processing():
         try:
             loop = asyncio.get_event_loop()
-            p = await loop.run_in_executor(None, _process_dividends, email, profile)
+            p = await loop.run_in_executor(_executor, _process_dividends, email, profile)
             deposit_amt, deposit_weeks = await loop.run_in_executor(
-                None, _process_weekly, email, p
+                _executor, _process_weekly, email, p
             )
-            p = await loop.run_in_executor(None, _process_settlement, email, p)
-            await loop.run_in_executor(None, _save, email, p)
-            triggered = await loop.run_in_executor(None, _check_alerts, p)
+            p = await loop.run_in_executor(_executor, _process_settlement, email, p)
+            await loop.run_in_executor(_executor, _save, email, p)
+            triggered = await loop.run_in_executor(_executor, _check_alerts, p)
             _alert_msgs[:] = triggered
             if deposit_amt:
                 _deposit_state["amt"] = deposit_amt
@@ -840,7 +847,7 @@ def main_page():
 
     async def _macro_worker():
         loop = asyncio.get_event_loop()
-        _macro_state["data"] = await loop.run_in_executor(None, _fetch_macro)
+        _macro_state["data"] = await loop.run_in_executor(_executor, _fetch_macro)
         macro_bar.refresh()
 
     ui.timer(0.1, _macro_worker, once=True)
@@ -880,21 +887,20 @@ def main_page():
                     values.append(p["unsettled"])
                     colors.append("#f59e0b")
 
-                intl = {
-                    "VWO",
-                    "VEA",
-                    "EFA",
-                    "IEMG",
-                    "FXI",
-                    "EWJ",
-                    "EWG",
-                    "EWZ",
-                    "INDA",
-                    "KWEB",
-                    "EEM",
-                    "FLTW",
-                    "TAN",
-                    "ICLN",
+                intl_frac = {
+                    "VWO": 1.0, "VEA": 1.0, "EFA": 1.0, "IEMG": 1.0,
+                    "EEM": 1.0, "VXUS": 1.0, "FXI": 1.0, "EWJ": 1.0,
+                    "EWG": 1.0, "EWY": 1.0, "EWZ": 1.0, "INDA": 1.0,
+                    "KWEB": 1.0, "FLTW": 1.0,
+                    "BABA": 1.0, "TSM": 1.0, "NIO": 1.0, "PDD": 1.0,
+                    "SE": 1.0, "SONY": 1.0, "TM": 1.0, "BP": 1.0,
+                    "NVS": 1.0, "UL": 1.0, "AZN": 1.0, "DEO": 1.0,
+                    "NVO": 1.0, "ADDYY": 1.0, "FRCOY": 1.0, "ASML": 1.0,
+                    "ARM": 1.0,
+                    "DRAM": 0.49, "BOTZ": 0.45, "TAN": 0.29,
+                    "CHPS": 0.28, "IBB": 0.27, "AIQ": 0.20, "SOXQ": 0.21,
+                    "IXJ": 0.19, "SMH": 0.16, "SOXX": 0.16, "ARKK": 0.12,
+                    "ICLN": 0.21, "ARKQ": 0.10,
                 }
                 prices = p.get("prices", {})
                 us_val = itnl_val = 0.0
@@ -902,10 +908,9 @@ def main_page():
                     pr = prices.get(t)
                     if pr is not None:
                         mv = pos["shares"] * pr
-                        if t.upper() in intl:
-                            itnl_val += mv
-                        else:
-                            us_val += mv
+                        frac = intl_frac.get(t.upper(), 0.0)
+                        itnl_val += mv * frac
+                        us_val += mv * (1 - frac)
                 if us_val > 0:
                     labels.append("US")
                     values.append(us_val)
@@ -1054,7 +1059,7 @@ def main_page():
             async def _load_portfolio():
                 loop = asyncio.get_event_loop()
                 _portfolio_state["data"] = await loop.run_in_executor(
-                    None, _portfolio, profile
+                    _executor, _portfolio, profile
                 )
                 portfolio_content.refresh()
 
@@ -1063,6 +1068,7 @@ def main_page():
         # ── TRADE ──
         with ui.tab_panel(tt):
             pending = {"data": None}
+            _sel_price_state = {"ticker": None, "price": None}
             opts = {t: format_ticker_option(t) for t in ALL_TICKERS}
             sel = (
                 ui.select(options=opts, label="Search symbol", clearable=True)
@@ -1108,10 +1114,15 @@ def main_page():
             limit_warn = ui.label().classes("text-sm text-negative mt-1")
             tax_info = ui.label().classes("text-sm text-muted mt-1")
 
-            def _upd_sel():
+            async def _on_sel_change():
                 t = sel.value
+                _sel_price_state["ticker"] = t
+                _sel_price_state["price"] = None
+                pr = None
                 if t:
-                    pr, _, company = fetch_stock_market_data(t)
+                    loop = asyncio.get_event_loop()
+                    pr, _, company = await loop.run_in_executor(_executor, lambda: fetch_stock_market_data(t))
+                    _sel_price_state["price"] = pr
                     if pr is not None:
                         price_val.set_text(f"${pr:.2f}")
                         src = get_price_source(t)
@@ -1138,19 +1149,10 @@ def main_page():
                 else:
                     position_info.set_text("")
                 tax_info.set_text("")
-
-            def _upd_mode():
-                s = mode.value == "Shares"
-                shares_in.set_visibility(s)
-                amount_in.set_visibility(not s)
-
-            def _upd_preview():
-                t = sel.value
                 if not t:
                     preview.set_text("")
                     limit_warn.set_text("")
                     return
-                pr, _, _ = fetch_stock_market_data(t)
                 if pr is None:
                     preview.set_text("")
                     limit_warn.set_text("")
@@ -1162,7 +1164,7 @@ def main_page():
                 )
                 cost_c = _cents(cost)
                 c_pct = (cost_c / profile["cash"]) * 100 if profile["cash"] > 0 else 0
-                p = _portfolio(profile)
+                p = await loop.run_in_executor(_executor, lambda: _portfolio(profile))
                 warn = ""
                 if action.value == "Buy":
                     ex = profile["holdings"].get(t, {}).get("shares", 0)
@@ -1195,8 +1197,70 @@ def main_page():
                         tax_info.set_text("")
                 limit_warn.set_text(warn)
 
-            sel.on_value_change(lambda: _upd_sel())
-            sel.on_value_change(lambda: _upd_preview())
+            async def _upd_preview():
+                t = sel.value
+                if not t:
+                    preview.set_text("")
+                    limit_warn.set_text("")
+                    return
+                pr = _sel_price_state["price"] if _sel_price_state["ticker"] == t else None
+                if pr is None:
+                    loop = asyncio.get_event_loop()
+                    fetched, _, _ = await loop.run_in_executor(_executor, lambda: fetch_stock_market_data(t))
+                    if fetched is not None:
+                        _sel_price_state["ticker"] = t
+                        _sel_price_state["price"] = fetched
+                        pr = fetched
+                if pr is None:
+                    preview.set_text("")
+                    limit_warn.set_text("")
+                    return
+                cost = (
+                    (shares_in.value * pr)
+                    if mode.value == "Shares"
+                    else amount_in.value
+                )
+                cost_c = _cents(cost)
+                c_pct = (cost_c / profile["cash"]) * 100 if profile["cash"] > 0 else 0
+                p = await loop.run_in_executor(_executor, lambda: _portfolio(profile))
+                warn = ""
+                if action.value == "Buy":
+                    ex = profile["holdings"].get(t, {}).get("shares", 0)
+                    w = ((cost + (ex * pr)) / p["total"]) * 100 if p["total"] > 0 else 0
+                    preview.set_text(
+                        f"\u2248 ${cost:,.2f}  \u00b7  {c_pct:.1f}% of cash  \u00b7  est. weight {w:.1f}%"
+                    )
+                    if cost_c > profile["cash"]:
+                        warn = f'\u26a0 Insufficient cash ({_fmt(profile["cash"])} available, {_fmt(cost_c)} needed)'
+                    tax_info.set_text("")
+                else:
+                    if t in profile["holdings"]:
+                        o = profile["holdings"][t]["shares"]
+                        sh_selling = (
+                            shares_in.value if mode.value == "Shares" else cost / pr
+                        )
+                        preview.set_text(f"\u2248 {sh_selling:.4f} shares")
+                        if sh_selling > o + 0.0001:
+                            warn = f"\u26a0 Only {o:.4f} shares owned"
+                        frac = sh_selling / o
+                        cb_d = (frac * profile["holdings"][t]["total_cost"]) / 100.0
+                        profit_d = cost - cb_d
+                        tax_d = max(0, profit_d * 0.15)
+                        net_d = cost - tax_d
+                        tax_info.set_text(
+                            f"Cost basis: ${cb_d:.2f}  \u00b7  Profit: ${profit_d:.2f}\nTax (15%): ${tax_d:.2f}  \u2192  Net proceeds: ${net_d:.2f} (unsettled)"
+                        )
+                    else:
+                        preview.set_text("")
+                        tax_info.set_text("")
+                limit_warn.set_text(warn)
+
+            def _upd_mode():
+                s = mode.value == "Shares"
+                shares_in.set_visibility(s)
+                amount_in.set_visibility(not s)
+
+            sel.on_value_change(lambda: _on_sel_change())
             action.on_value_change(lambda: _upd_preview())
             mode.on_value_change(lambda: _upd_preview())
             mode.on_value_change(lambda: _upd_mode())
@@ -1238,8 +1302,9 @@ def main_page():
                             ),
                         )
 
-            def _exec(data):
-                success, error, event, details = _execute_trade(data, profile, email, _profile_locks, _save, ALL_TICKERS)
+            async def _exec(data):
+                loop = asyncio.get_event_loop()
+                success, error, event, details = await loop.run_in_executor(_executor, lambda: _execute_trade(data, profile, email, _profile_locks, _save, ALL_TICKERS))
                 if not success:
                     ui.notify(error, type="negative")
                     if "Price changed" in error or "re-review" in error:
@@ -1248,7 +1313,7 @@ def main_page():
                     return
                 _touch_session()
                 _audit(event, email, details)
-                _summary_state["data"] = _portfolio(profile)
+                _summary_state["data"] = await loop.run_in_executor(_executor, lambda: _portfolio(profile))
                 _portfolio_state["data"] = _summary_state["data"]
                 pending["data"] = None
                 confirm_card.refresh()
@@ -1264,8 +1329,9 @@ def main_page():
                     pass
                 ui.notify("\u2705 Trade executed!", type="positive")
 
-            def _review():
-                pr, _, _ = fetch_stock_market_data(sel.value)
+            async def _review():
+                loop = asyncio.get_event_loop()
+                pr, _, _ = await loop.run_in_executor(_executor, lambda: fetch_stock_market_data(sel.value))
                 valid, err, data = _validate_trade_inputs(sel.value, pr, action.value, mode.value, shares_in.value, amount_in.value, profile, ALL_TICKERS)
                 if not valid:
                     ui.notify(err, type="negative")
@@ -1294,32 +1360,43 @@ def main_page():
                     ui.label("\U0001f4ca Market Movers").classes(
                         "font-bold text-lg mb-3"
                     )
-                    _movers_state: dict = {"data": [], "loaded": False}
 
                     async def _load_movers():
-                        def _fetch():
-                            all_data = []
-                            stock_groups = [
-                                STOCK_TICKERS[i : i + 100]
-                                for i in range(0, len(STOCK_TICKERS), 100)
-                            ]
-                            for group in stock_groups + [ETF_TICKERS]:
-                                try:
-                                    all_data.extend(list(get_top_movers(tuple(group))))
-                                except Exception as e:
-                                    logger.error(
-                                        f"Movers batch error ({len(group)} tickers): {e}"
-                                    )
-                            return all_data
+                        import time as _time
+                        now = _time.time()
+                        if _movers_cache["loaded"] and (now - _movers_cache["ts"]) < _MOVERS_TTL:
+                            movers.refresh()
+                            return
+                        if _movers_cache["loading"]:
+                            return
+                        _movers_cache["loading"] = True
+                        try:
+                            def _fetch():
+                                all_data = []
+                                stock_groups = [
+                                    STOCK_TICKERS[i : i + 100]
+                                    for i in range(0, len(STOCK_TICKERS), 100)
+                                ]
+                                for group in stock_groups + [ETF_TICKERS]:
+                                    try:
+                                        all_data.extend(list(get_top_movers(tuple(group))))
+                                    except Exception as e:
+                                        logger.error(
+                                            f"Movers batch error ({len(group)} tickers): {e}"
+                                        )
+                                return all_data
 
-                        loop = asyncio.get_event_loop()
-                        _movers_state["data"] = await loop.run_in_executor(None, _fetch)
-                        _movers_state["loaded"] = True
-                        movers.refresh()
+                            loop = asyncio.get_event_loop()
+                            _movers_cache["data"] = await loop.run_in_executor(_executor, _fetch)
+                            _movers_cache["loaded"] = True
+                            _movers_cache["ts"] = _time.time()
+                            movers.refresh()
+                        finally:
+                            _movers_cache["loading"] = False
 
                     @ui.refreshable
                     def movers():
-                        if not _movers_state["loaded"]:
+                        if not _movers_cache["loaded"]:
                             ui.label("Loading market data...").classes(
                                 "text-muted text-sm"
                             )
@@ -1329,7 +1406,7 @@ def main_page():
                                     "Stocks",
                                     [
                                         x
-                                        for x in _movers_state["data"]
+                                        for x in _movers_cache["data"]
                                         if x[0] in STOCK_TICKERS
                                     ],
                                 ),
@@ -1337,7 +1414,7 @@ def main_page():
                                     "ETFs",
                                     [
                                         x
-                                        for x in _movers_state["data"]
+                                        for x in _movers_cache["data"]
                                         if x[0] in ETF_TICKERS
                                     ],
                                 ),
@@ -1417,7 +1494,7 @@ def main_page():
                         try:
                             loop = asyncio.get_event_loop()
                             d = await loop.run_in_executor(
-                                None,
+                                _executor,
                                 lambda: _flatten_cols(
                                     yf.download(
                                         t, period=period, progress=False, timeout=20
@@ -1515,8 +1592,8 @@ def main_page():
                         try:
                             loop = asyncio.get_event_loop()
                             price_data, hist = await asyncio.gather(
-                                loop.run_in_executor(None, fetch_stock_market_data, t),
-                                loop.run_in_executor(None, fetch_full_history, t, period),
+                                loop.run_in_executor(_executor, fetch_stock_market_data, t),
+                                loop.run_in_executor(_executor, fetch_full_history, t, period),
                             )
                             pr = price_data[0] if price_data else None
                             company = price_data[2] if price_data else ""
@@ -1646,7 +1723,7 @@ def main_page():
                     try:
                         loop = asyncio.get_event_loop()
                         raw = await loop.run_in_executor(
-                            None, lambda: yf.Ticker(t).news
+                            _executor, lambda: yf.Ticker(t).news
                         )
                         articles = []
                         for a in (raw or []):
@@ -1846,50 +1923,53 @@ def main_page():
                         "font-bold text-lg mb-3"
                     )
 
-                    def _load_standings():
-                        db = get_gcs_database()
-                        if not db:
-                            _standings_state["rows"] = []
-                            standings_content.refresh()
-                            return
-                        db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
-                        all_tickers = set()
-                        for p in db.values():
-                            p = _migrate_profile(p)
-                            all_tickers.update(p.get("holdings", {}).keys())
-                        price_map = {}
-                        if all_tickers:
-                            tl = list(all_tickers)
-                            with ThreadPoolExecutor(max_workers=min(8, len(tl))) as ex:
-                                res = list(
-                                    ex.map(
-                                        lambda t: (t, fetch_stock_market_data(t)[0]), tl
-                                    )
+                    async def _load_standings():
+                        def _work():
+                            db = get_gcs_database()
+                            if not db:
+                                return []
+                            db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
+                            db.pop("rpiana@stjohnsguam.com", None)
+                            all_tickers = set()
+                            for p in db.values():
+                                p = _migrate_profile(p)
+                                all_tickers.update(p.get("holdings", {}).keys())
+                            price_map = {}
+                            if all_tickers:
+                                tl = list(all_tickers)
+                                futures = {t: _executor.submit(fetch_stock_market_data, t) for t in tl}
+                                for t, fut in futures.items():
+                                    try:
+                                        pr = fut.result(timeout=10)[0]
+                                        if pr is not None:
+                                            price_map[t] = pr
+                                    except Exception:
+                                        pass
+                            rows = []
+                            for e, p in db.items():
+                                p = _migrate_profile(p)
+                                mv = 0.0
+                                for t, pos in p.get("holdings", {}).items():
+                                    pr = price_map.get(t)
+                                    if pr is not None:
+                                        mv += pos["shares"] * pr
+                                cash = p.get("cash", STARTING_CASH_CENTS)
+                                unsettled = p.get("unsettled_cash", 0)
+                                nw = ((cash + unsettled) / 100) + mv
+                                rows.append(
+                                    {
+                                        "Student": p.get("name", "Student"),
+                                        "Net Worth": nw,
+                                        "Return": (
+                                            (nw - ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100))
+                                            / ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100)
+                                        )
+                                        * 100,
+                                    }
                                 )
-                            for t, pr in res:
-                                if pr is not None:
-                                    price_map[t] = pr
-                        rows = []
-                        for e, p in db.items():
-                            p = _migrate_profile(p)
-                            mv = 0.0
-                            for t, pos in p.get("holdings", {}).items():
-                                pr = price_map.get(t)
-                                if pr is not None:
-                                    mv += pos["shares"] * pr
-                            cash = p.get("cash", STARTING_CASH_CENTS)
-                            nw = (cash / 100) + mv
-                            rows.append(
-                                {
-                                    "Student": p.get("name", "Student"),
-                                    "Net Worth": nw,
-                                    "Return": (
-                                        (nw - ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100))
-                                        / ((STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100)
-                                    )
-                                    * 100,
-                                }
-                            )
+                            return rows
+                        loop = asyncio.get_event_loop()
+                        rows = await loop.run_in_executor(_executor, _work)
                         _standings_state["rows"] = rows
                         standings_content.refresh()
 
@@ -1954,59 +2034,75 @@ def main_page():
                             on_change=lambda e: _toggle_news(e.value),
                         ).classes("text-sm")
 
-                    def _load_admin():
-                        db = get_gcs_database()
-                        if not db:
-                            _admin_state["rows"] = []
-                            admin_table.refresh()
-                            return
-                        db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
-                        all_tickers = set()
-                        for p in db.values():
-                            p = _migrate_profile(p)
-                            all_tickers.update(p.get("holdings", {}).keys())
-                        price_map = {}
-                        if all_tickers:
-                            tl = list(all_tickers)
-                            with ThreadPoolExecutor(max_workers=min(8, len(tl))) as ex:
-                                res = list(
-                                    ex.map(
-                                        lambda t: (t, fetch_stock_market_data(t)[0]), tl
-                                    )
+                    async def _load_admin():
+                        def _work():
+                            db = get_gcs_database()
+                            if not db:
+                                return []
+                            db.pop(_safe_email_key("rpiana@stjohnsguam.com"), None)
+                            db.pop("rpiana@stjohnsguam.com", None)
+                            all_tickers = set()
+                            for p in db.values():
+                                p = _migrate_profile(p)
+                                all_tickers.update(p.get("holdings", {}).keys())
+                            price_map = {}
+                            if all_tickers:
+                                tl = list(all_tickers)
+                                futures = {t: _executor.submit(fetch_stock_market_data, t) for t in tl}
+                                for t, fut in futures.items():
+                                    try:
+                                        pr = fut.result(timeout=10)[0]
+                                        if pr is not None:
+                                            price_map[t] = pr
+                                    except Exception:
+                                        pass
+                            _email_by_hash = {}
+                            for ce, cp in _profiles.items():
+                                if cp:
+                                    _email_by_hash[_safe_email_key(ce)] = ce
+                            rows = []
+                            for e, p in db.items():
+                                p = _migrate_profile(p)
+                                if "email" not in p:
+                                    p["email"] = _email_by_hash.get(e, "unknown")
+                                mv = 0.0
+                                holdings_detail = []
+                                for t, pos in p.get("holdings", {}).items():
+                                    pr = price_map.get(t)
+                                    val = pos["shares"] * pr if pr else 0
+                                    mv += val
+                                    cb = pos["total_cost"] / 100.0
+                                    holdings_detail.append({
+                                        "ticker": t,
+                                        "shares": pos["shares"],
+                                        "cost_basis": cb,
+                                        "price": pr,
+                                        "value": val,
+                                    })
+                                cash = p.get("cash", STARTING_CASH_CENTS)
+                                unsettled = p.get("unsettled_cash", 0)
+                                nw = ((cash + unsettled) / 100) + mv
+                                cap = (STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100
+                                pl = nw - cap
+                                rows.append(
+                                    {
+                                        "_key": e,
+                                        "Student": p.get("name", "Unknown"),
+                                        "Email": p.get("email") or "unknown",
+                                        "Net Worth": nw,
+                                        "P&L": pl,
+                                        "Return": (pl / cap) * 100,
+                                        "Cash": cash / 100,
+                                        "Stock Value": mv,
+                                        "Trades": len(p.get("history", [])),
+                                        "_holdings": holdings_detail,
+                                        "_cash": cash / 100,
+                                        "_unsettled": unsettled / 100,
+                                    }
                                 )
-                            for t, pr in res:
-                                if pr is not None:
-                                    price_map[t] = pr
-                        _email_by_hash = {}
-                        for ce, cp in _profiles.items():
-                            if cp:
-                                _email_by_hash[_safe_email_key(ce)] = ce
-                        rows = []
-                        for e, p in db.items():
-                            p = _migrate_profile(p)
-                            if "email" not in p:
-                                p["email"] = _email_by_hash.get(e, "unknown")
-                            mv = 0.0
-                            for t, pos in p.get("holdings", {}).items():
-                                pr = price_map.get(t)
-                                if pr is not None:
-                                    mv += pos["shares"] * pr
-                            cash = p.get("cash", STARTING_CASH_CENTS)
-                            nw = (cash / 100) + mv
-                            cap = (STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100
-                            pl = nw - cap
-                            rows.append(
-                                {
-                                    "Student": p.get("name", "Unknown"),
-                                    "Email": p.get("email") or "unknown",
-                                    "Net Worth": nw,
-                                    "P&L": pl,
-                                    "Return": (pl / cap) * 100,
-                                    "Cash": cash / 100,
-                                    "Stock Value": mv,
-                                    "Trades": len(p.get("history", [])),
-                                }
-                            )
+                            return rows
+                        loop = asyncio.get_event_loop()
+                        rows = await loop.run_in_executor(_executor, _work)
                         _admin_state["rows"] = rows
                         admin_table.refresh()
 
@@ -2030,50 +2126,143 @@ def main_page():
                         for c in ["Net Worth", "P&L", "Cash", "Stock Value"]:
                             df[c] = df[c].map("${:,.2f}".format)
                         df["Return"] = df["Return"].map("{:+.2f}%".format)
-                        ui.table.from_pandas(df).classes("w-full").props("hide-bottom")
+
+                        columns = [
+                            {"name": "Rank", "label": "Rank", "field": "Rank", "align": "center"},
+                            {"name": "Student", "label": "Student", "field": "Student"},
+                            {"name": "Email", "label": "Email", "field": "Email"},
+                            {"name": "Net Worth", "label": "Net Worth", "field": "Net Worth", "align": "right"},
+                            {"name": "P&L", "label": "P&L", "field": "P&L", "align": "right"},
+                            {"name": "Return", "label": "Return", "field": "Return", "align": "right"},
+                            {"name": "Cash", "label": "Cash", "field": "Cash", "align": "right"},
+                            {"name": "Stock Value", "label": "Stock Value", "field": "Stock Value", "align": "right"},
+                            {"name": "Trades", "label": "Trades", "field": "Trades", "align": "center"},
+                        ]
+                        table_data = df.to_dict("records")
+
+                        tbl = ui.table(
+                            columns=columns,
+                            rows=table_data,
+                            row_key="Rank",
+                            selection="multiple",
+                        ).classes("w-full").props("hide-bottom")
+
+                        holdings_dialog = ui.dialog()
+                        with holdings_dialog:
+                            with ui.card().classes("w-[500px]"):
+                                holdings_title = ui.label("").classes("font-bold text-lg")
+                                holdings_content = ui.column().classes("w-full mt-2")
+                                ui.button("Close", on_click=holdings_dialog.close).props("flat")
+
+                        def _show_holdings(row):
+                            name = row.get("Student", "Unknown")
+                            email = row.get("Email", "unknown")
+                            cash = row.get("_cash", 0)
+                            unsettled = row.get("_unsettled", 0)
+                            holdings = row.get("_holdings", [])
+                            holdings_title.set_text(f"{name} — Holdings")
+                            holdings_content.clear()
+                            with holdings_content:
+                                ui.label(f"Email: {email}").classes("text-sm text-muted")
+                                ui.label(f"Cash: ${cash:,.2f}").classes("text-sm text-muted")
+                                if unsettled > 0:
+                                    ui.label(f"Unsettled: ${unsettled:,.2f}").classes("text-sm text-warning mb-2")
+                                else:
+                                    ui.element("div").classes("mb-2")
+                                ui.separator().classes("my-2")
+                                if not holdings:
+                                    ui.label("No holdings yet.").classes("text-muted text-sm")
+                                else:
+                                    for h in sorted(holdings, key=lambda x: x["value"], reverse=True):
+                                        ticker = h["ticker"]
+                                        shares = h["stock_shares"] = h["shares"]
+                                        price = h["price"]
+                                        value = h["value"]
+                                        cb = h["cost_basis"]
+                                        pnl = value - cb if cb > 0 else 0
+                                        pnl_cls = "text-positive" if pnl >= 0 else "text-negative"
+                                        price_str = f"${price:.2f}" if price else "N/A"
+                                        with ui.row().classes("w-full items-center justify-between py-1"):
+                                            ui.label(f"{ticker}").classes("font-semibold w-20")
+                                            ui.label(f"{shares:.4f} shares").classes("text-sm w-24 text-muted")
+                                            ui.label(price_str).classes("text-sm w-20 text-muted")
+                                            ui.label(f"${value:,.2f}").classes("text-sm w-24 text-right")
+                                            ui.label(f"{'+'if pnl>=0 else ''}{pnl:,.2f}").classes(f"text-sm w-20 text-right {pnl_cls}")
+                            holdings_dialog.open()
+
+                        tbl.on("rowClick", lambda e: _show_holdings(e.args[1] if len(e.args) > 1 else {}))
+
                         ui.label(f"Active: {len(df)}").classes(
                             "text-sm text-muted mt-2"
                         )
                         ui.separator().classes("my-3")
-                        ui.label("\u2757 Remove Student").classes(
-                            "font-semibold text-sm"
-                        )
-                        with ui.row().classes("items-center gap-2"):
-                            rem_email = (
-                                ui.input("Full email address")
-                                .props("outlined dense")
-                                .classes("w-64")
-                            )
-                            rem_status = ui.label("").classes("text-sm")
 
-                            def _do_remove():
-                                if not is_teacher(email):
-                                    _audit("UNAUTHORIZED_ADMIN_ATTEMPT", email)
-                                    ui.notify("Unauthorized.", type="negative")
-                                    return
-                                target_email = rem_email.value.strip()
-                                if not target_email:
-                                    rem_status.set_text("Enter an email.")
-                                    rem_status.classes("text-warning")
-                                    return
+                        confirm_dialog = ui.dialog()
+
+                        with confirm_dialog:
+                            with ui.card().classes("w-96"):
+                                ui.label("Confirm Removal").classes("font-bold text-lg")
+                                confirm_list = ui.label("").classes("text-sm mt-2")
+                                ui.separator().classes("my-2")
+                                with ui.row().classes("w-full justify-end gap-2"):
+                                    ui.button("Cancel", on_click=confirm_dialog.close).props("flat")
+                                    ui.button("Remove", on_click=lambda: _execute_remove()).props("color=negative")
+
+                        def _confirm_remove():
+                            sel = tbl.selected
+                            if not sel:
+                                ui.notify("Select students to remove first.", type="warning")
+                                return
+                            if not is_teacher(email):
+                                _audit("UNAUTHORIZED_ADMIN_ATTEMPT", email)
+                                ui.notify("Unauthorized.", type="negative")
+                                return
+                            lines = []
+                            for r in sel:
+                                name = r.get("Student", "Unknown")
+                                em = r.get("Email", "unknown")
+                                lines.append(f"  \u2022 {name} ({em})")
+                            confirm_list.set_text(f"Remove {len(sel)} student(s)?\n" + "\n".join(lines))
+                            confirm_dialog.open()
+
+                        def _execute_remove():
+                            if not is_teacher(email):
+                                _audit("UNAUTHORIZED_ADMIN_ATTEMPT", email)
+                                ui.notify("Unauthorized.", type="negative")
+                                confirm_dialog.close()
+                                return
+                            sel = tbl.selected
+                            removed = 0
+                            errors = []
+                            for r in list(sel):
+                                target_email = r.get("Email", "unknown")
+                                gcs_key = r.get("_key", "")
+                                target_name = r.get("Student", "Unknown")
                                 if target_email == email:
-                                    rem_status.set_text("Cannot remove yourself.")
-                                    rem_status.classes("text-negative")
-                                    return
+                                    errors.append(f"{target_name}: cannot remove yourself")
+                                    continue
                                 try:
-                                    delete_student_profile(target_email)
-                                    _audit("ADMIN_REMOVE_STUDENT", email, {"target": target_email})
-                                    rem_status.set_text(f"Removed {target_email}.")
-                                    rem_status.classes("text-positive")
-                                    rem_email.value = ""
-                                    _load_admin()
+                                    if target_email and target_email != "unknown":
+                                        delete_student_profile(target_email)
+                                    elif gcs_key:
+                                        delete_student_profile_by_key(gcs_key)
+                                    else:
+                                        errors.append(f"{target_name}: no email or key")
+                                        continue
+                                    _audit("ADMIN_REMOVE_STUDENT", email, {"target": target_email, "name": target_name})
+                                    removed += 1
                                 except Exception as e:
-                                    rem_status.set_text(f"Error: {e}")
-                                    rem_status.classes("text-negative")
+                                    errors.append(f"{target_name}: {e}")
+                            confirm_dialog.close()
+                            if removed:
+                                ui.notify(f"Removed {removed} student(s).", type="positive")
+                            if errors:
+                                ui.notify("Errors:\n" + "\n".join(errors), type="warning")
+                            _load_admin()
 
-                            ui.button("Remove", on_click=_do_remove).props(
-                                "color=negative dense"
-                            )
+                        ui.button("Remove Selected", on_click=_confirm_remove).props(
+                            "color=negative dense"
+                        )
 
                     admin_table()
 
@@ -2104,24 +2293,33 @@ def main_page():
 
     # ── Periodic refresh ──
     async def _tick():
-        loop = asyncio.get_event_loop()
-        d = await loop.run_in_executor(None, _portfolio, profile)
-        _touch_session()
-        _summary_state["data"] = d
-        summary.refresh()
-        _portfolio_state["data"] = d
-        portfolio_content.refresh()
         try:
-            standings_content.refresh()
-        except Exception:
-            logger.debug("standings_content.refresh() failed")
-        if is_teacher(email):
+            loop = asyncio.get_event_loop()
+            d = await loop.run_in_executor(_executor, _portfolio, profile)
+            _summary_state["data"] = d
+            summary.refresh()
+            _portfolio_state["data"] = d
+            portfolio_content.refresh()
             try:
-                admin_table.refresh()
+                standings_content.refresh()
             except Exception:
-                logger.debug("admin_table.refresh() failed")
+                logger.debug("standings_content.refresh() failed")
+            if is_teacher(email):
+                try:
+                    admin_table.refresh()
+                except Exception:
+                    logger.debug("admin_table.refresh() failed")
+        except Exception:
+            logger.debug("_tick refresh failed")
+        finally:
+            _touch_session()
 
     ui.timer(300, _tick, active=True)
+
+    async def _heartbeat():
+        _touch_session()
+
+    ui.timer(60, _heartbeat, active=True)
 
     async def _check_session_timeout():
         last = _get_session("last_activity", 0)
