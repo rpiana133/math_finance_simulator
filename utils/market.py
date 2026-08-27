@@ -1,10 +1,61 @@
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any
 
 import pandas as pd
 import yfinance as yf
 from cachetools import TTLCache
+
+
+class _TokenBucket:
+    """Simple token-bucket rate limiter (thread-safe). Allows bursts up to
+    *capacity* then refills at *rate* tokens/sec."""
+
+    def __init__(self, capacity: int = 5, rate: float = 2.0):
+        self.capacity = capacity
+        self.rate = rate
+        self._tokens = float(capacity)
+        self._last = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self, timeout: float = 30.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                elapsed = now - self._last
+                self._last = now
+                self._tokens = min(self.capacity, self._tokens + elapsed * self.rate)
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return True
+                wait = (1.0 - self._tokens) / self.rate
+            if time.monotonic() + wait > deadline:
+                return False
+            time.sleep(min(wait, 0.5))
+
+
+_yf_limiter = _TokenBucket(capacity=5, rate=2.0)
+
+
+def _rate_limited(func, *args, **kwargs):
+    """Call *func* while respecting the global yfinance rate limit.
+    Retries on transient/empty responses (rate-limit indication)."""
+    import logging
+    logger = logging.getLogger(__name__)
+    for attempt in range(3):
+        _yf_limiter.acquire()
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except Exception:
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
+    return func(*args, **kwargs)
 
 _cache_600 = TTLCache(maxsize=2048, ttl=600)
 _cache_86400 = TTLCache(maxsize=64, ttl=86400)
@@ -562,6 +613,8 @@ POPULAR_STOCKS = {
     "LUNR": "Intuitive Machines",
     "HIMS": "Hims & Hers",
     "NVO": "Novo Nordisk ADR",
+    "SKHY": "SK Hynix ADR",
+    "SSNLF": "Samsung Electronics ADR",
     "TDOC": "Teladoc Health",
     "VKTX": "Viking Therapeutics",
     "QURE": "uniQure",
@@ -663,6 +716,35 @@ POPULAR_ETFS = {
     "IYH": "iShares U.S. Healthcare ETF",
     "IBB": "iShares Biotechnology ETF",
     "XBI": "SPDR S&P Biotech ETF",
+    "BNDX": "Vanguard Total International Bond ETF",
+    "SCHB": "Schwab U.S. Broad Market ETF",
+    "SCHX": "Schwab U.S. Large-Cap ETF",
+    "SCHA": "Schwab U.S. Small-Cap ETF",
+    "SCHF": "Schwab International Equity ETF",
+    "SCHE": "Schwab Emerging Markets Equity ETF",
+    "SCHZ": "Schwab U.S. Aggregate Bond ETF",
+    "VUG": "Vanguard Growth ETF",
+    "VTV": "Vanguard Value ETF",
+    "VO": "Vanguard Mid-Cap ETF",
+    "VB": "Vanguard Small-Cap ETF",
+    "IVV": "iShares Core S&P 500 ETF",
+    "IJR": "iShares Core S&P Small-Cap ETF",
+    "IEFA": "iShares Core MSCI EAFE ETF",
+    "LQD": "iShares Investment Grade Corporate Bond ETF",
+    "TIP": "iShares TIPS Bond ETF",
+    "MUB": "iShares National Muni Bond ETF",
+    "SPLV": "Invesco S&P 500 Low Volatility ETF",
+    "SPHQ": "Invesco S&P 500 Quality ETF",
+    "RSP": "Invesco S&P 500 Equal Weight ETF",
+    "SPUU": "Direxion Daily S&P 500 Bull 2X ETF",
+    "SPXL": "Direxion Daily S&P 500 Bull 3X ETF",
+    "SH": "ProShares Short S&P 500",
+    "SDS": "ProShares UltraShort S&P 500",
+    "SPXS": "Direxion Daily S&P 500 Bear 3X ETF",
+    "USSG": "Xtrackers MSCI USA ESG Leaders Equity ETF",
+    "ESGU": "iShares ESG Aware MSCI USA ETF",
+    "SUSA": "iShares MSCI USA ESG Select ETF",
+    "SPLG": "SPDR Portfolio S&P 500 ETF",
 }
 
 STOCK_TICKERS = list(POPULAR_STOCKS.keys())
@@ -723,17 +805,45 @@ def _cached(key: str, cache: TTLCache, func, *args) -> Any:
 
 
 def fetch_stock_market_data(ticker: str) -> tuple[float | None, Any, str | None]:
-    return _cached(f"price_{ticker}", _cache_600, _fetch_stock_market_data_impl, ticker)
+    key = f"price_{ticker}"
+    cached = _cache_600.get(key)
+    if cached is not None:
+        return cached
+    _yf_limiter.acquire()
+    cached = _cache_600.get(key)
+    if cached is not None:
+        return cached
+    result = _fetch_stock_market_data_impl(ticker)
+    _cache_600[key] = result
+    return result
 
 
 def fetch_full_history(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
-    return _cached(
-        f"hist_{ticker}_{period}", _cache_600, _fetch_full_history_impl, ticker, period
-    )
+    key = f"hist_{ticker}_{period}"
+    cached = _cache_600.get(key)
+    if cached is not None:
+        return cached
+    _yf_limiter.acquire()
+    cached = _cache_600.get(key)
+    if cached is not None:
+        return cached
+    result = _fetch_full_history_impl(ticker, period)
+    _cache_600[key] = result
+    return result
 
 
 def get_dividends(ticker: str) -> pd.Series | None:
-    return _cached(f"div_{ticker}", _cache_86400, _get_dividends_impl, ticker)
+    key = f"div_{ticker}"
+    cached = _cache_86400.get(key)
+    if cached is not None:
+        return cached
+    _yf_limiter.acquire()
+    cached = _cache_86400.get(key)
+    if cached is not None:
+        return cached
+    result = _get_dividends_impl(ticker)
+    _cache_86400[key] = result
+    return result
 
 
 def _fetch_current_price(ticker: str) -> float | None:
@@ -782,9 +892,10 @@ def warm_price_cache(tickers: list[str]) -> None:
     if not uncached:
         return
 
-    # Try current price per ticker first
+    # Try current price per ticker first (rate-limited)
     remaining = []
     for t in uncached:
+        _yf_limiter.acquire()
         p = _fetch_current_price(t)
         if p is not None:
             _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
@@ -795,6 +906,7 @@ def warm_price_cache(tickers: list[str]) -> None:
         return
 
     try:
+        _yf_limiter.acquire()
         # Download remaining tickers in a single batch
         data = _flatten_cols(
             yf.download(" ".join(remaining), period="5d", progress=False, timeout=3)
@@ -849,7 +961,16 @@ def get_top_movers(
     tickers: list[str] | tuple[str, ...],
 ) -> list[tuple[str, str, float, float]]:
     key = f"movers_{hash(tuple(tickers))}"
-    return _cached(key, _cache_1800, _get_top_movers_impl, tickers)
+    cached = _cache_1800.get(key)
+    if cached is not None:
+        return cached
+    _yf_limiter.acquire()
+    cached = _cache_1800.get(key)
+    if cached is not None:
+        return cached
+    result = _get_top_movers_impl(tickers)
+    _cache_1800[key] = result
+    return result
 
 
 def _get_top_movers_impl(
@@ -859,6 +980,7 @@ def _get_top_movers_impl(
     for i in range(0, len(tickers), max_batch):
         batch = tickers[i : i + max_batch]
         try:
+            _yf_limiter.acquire()
             data = yf.download(" ".join(batch), period="5d", progress=False, timeout=3)
             if data.empty:
                 continue

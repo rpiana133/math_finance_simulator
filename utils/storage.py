@@ -29,6 +29,9 @@ _SETTINGS_PREFIX = "settings/"
 _SETTINGS_CACHE: dict[str, tuple[dict, float]] = {}
 _SETTINGS_CACHE_TTL = 60.0
 
+_db_cache: dict[str, tuple[dict, float]] = {}
+_DB_CACHE_TTL = 60.0
+
 
 def load_class_settings() -> dict:
     global _SETTINGS_CACHE
@@ -104,6 +107,7 @@ def _gcs_token() -> str:
             "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
             "assertion": assertion,
         },
+        timeout=5,
     )
     try:
         resp.raise_for_status()
@@ -122,6 +126,7 @@ def _gcs_read(path: str) -> str | None:
     resp = requests.get(
         f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
         headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
     )
     if resp.status_code == 404:
         return None
@@ -138,6 +143,7 @@ def _gcs_write(path: str, data: str) -> None:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
+        timeout=5,
     )
     resp.raise_for_status()
 
@@ -147,6 +153,7 @@ def _gcs_list(prefix: str) -> list[str]:
     resp = requests.get(
         f"https://storage.googleapis.com/storage/v1/b/{GCS_BUCKET_NAME}/o?prefix={urllib.parse.quote(prefix)}",
         headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
     )
     if resp.status_code != 200:
         return []
@@ -243,8 +250,20 @@ def _gcs_delete(path: str) -> None:
     resp = requests.delete(
         f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{urllib.parse.quote(path)}",
         headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
     )
     resp.raise_for_status()
+
+
+def delete_student_profile_by_key(gcs_key: str) -> None:
+    """Delete a student profile directly by its GCS hash key (for unknown-email profiles)."""
+    _gcs_delete(f"{BLOB_PREFIX}{gcs_key}.json")
+    # Clean up all possible legacy paths with the same key
+    for legacy_path in [f"{gcs_key}.json"]:
+        try:
+            _gcs_delete(legacy_path)
+        except Exception:
+            pass
 
 
 def delete_student_profile(email: str) -> None:
@@ -267,6 +286,11 @@ def delete_student_profile(email: str) -> None:
 
 
 def get_gcs_database() -> dict[str, dict]:
+    global _db_cache
+    now = time.time()
+    cached = _db_cache.get("all")
+    if cached and now - cached[1] < _DB_CACHE_TTL:
+        return cached[0]
     names = _gcs_list(BLOB_PREFIX)
     db: dict[str, dict] = {}
     for name in names:
@@ -274,4 +298,5 @@ def get_gcs_database() -> dict[str, dict]:
         data = _gcs_read(name)
         if data:
             db[key] = json.loads(data)
+    _db_cache["all"] = (db, now)
     return db

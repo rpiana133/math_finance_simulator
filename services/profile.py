@@ -12,6 +12,7 @@ from utils.storage import load_student_profile, save_student_profile
 
 _profiles: dict = {}
 _profile_locks: dict[str, Lock] = {}
+_shared_executor = ThreadPoolExecutor(max_workers=8)
 
 
 def _migrate_profile(p: dict | None) -> dict | None:
@@ -71,8 +72,7 @@ def _portfolio(profile: dict) -> dict:
     live = []
     hold_items = list(holdings.items())
     if hold_items:
-        with ThreadPoolExecutor(max_workers=min(8, len(hold_items))) as ex:
-            prices = list(ex.map(lambda t: fetch_stock_market_data(t[0]), hold_items))
+        prices = list(_shared_executor.map(lambda t: fetch_stock_market_data(t[0]), hold_items))
         for (ticker, pos), (price, _, _) in zip(hold_items, prices):
             if price is not None and not math.isnan(price):
                 cv = pos["shares"] * price
