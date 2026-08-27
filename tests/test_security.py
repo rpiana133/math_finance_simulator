@@ -351,3 +351,39 @@ def test_session_store_encrypted_token_lookup():
         assert token in _session_store
         assert _session_store[token]["email"] == "secret@example.com"
         _session_store.pop(token, None)
+
+
+@patch("services.profile.fetch_stock_market_data", return_value=(100.0, None, None))
+def test_portfolio_skips_zero_cost_dust_holding(mock_fetch):
+    from services.profile import _portfolio
+
+    profile = {
+        "cash": 50000,
+        "unsettled_cash": 0,
+        "holdings": {
+            "SPY": {"shares": 10.0, "total_cost": 150000},
+            "LLY": {"shares": 1.18e-06, "total_cost": 0},
+        },
+        "history": [],
+        "total_deposits": 0,
+        "dividend_tracker": {},
+        "total_dividends_earned": 0,
+    }
+    result = _portfolio(profile)
+    assert len(result["live_data"]) == 1
+    assert result["live_data"][0]["Ticker"] == "SPY"
+    assert result["total_hold"] == 10.0 * 100.0
+
+
+def test_clean_dust_holdings_removes_zero_cost_positions():
+    from services.profile import _clean_dust_holdings
+
+    profile = {
+        "holdings": {
+            "VOO": {"shares": 4.0, "total_cost": 48000},
+            "IVZ": {"shares": 3.46e-05, "total_cost": 0},
+            "ANET": {"shares": 0.0, "total_cost": 50000},
+        }
+    }
+    _clean_dust_holdings(profile)
+    assert list(profile["holdings"].keys()) == ["VOO"]

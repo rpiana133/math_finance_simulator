@@ -23,6 +23,7 @@ from nicegui import app, ui
 
 from services.profile import (
     _check_alerts,
+    _clean_dust_holdings,
     _get,
     _migrate_profile,
     _portfolio,
@@ -651,7 +652,7 @@ def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
             profile.setdefault("unsettled_entries", []).append({"amount": net_c, "time": datetime.now().isoformat()})
             profile["holdings"][t]["shares"] -= data["shares"]
             profile["holdings"][t]["total_cost"] -= cb
-            if profile["holdings"][t]["shares"] <= 0:
+            if profile["holdings"][t]["shares"] <= 1e-6 or profile["holdings"][t]["total_cost"] <= 0:
                 del profile["holdings"][t]
             profile.setdefault("history", []).append({"type": "Sell", "ticker": t, "shares": round(data["shares"], 4), "price": round(data["price"], 2), "total": round(data["cost"], 2), "cost_basis": round(cb / 100.0, 2), "tax": round(tax_c / 100.0, 2), "time": datetime.now().strftime("%Y-%m-%d %H:%M")})
             details = {"ticker": t, "shares": round(data["shares"], 4), "price": round(data["price"], 2), "net_cents": net_c, "tax_cents": tax_c}
@@ -782,7 +783,11 @@ async def main_page():
 
     async def _load_summary():
         loop = asyncio.get_event_loop()
-        _summary_state["data"] = await loop.run_in_executor(_executor, _portfolio, profile)
+        try:
+            _summary_state["data"] = await loop.run_in_executor(_executor, _portfolio, profile)
+        except Exception as e:
+            logger.error(f"Portfolio summary load failed: {e}")
+            _summary_state["data"] = {"cash": 0, "unsettled": 0, "total_hold": 0, "pl": 0, "pl_pct": 0.0, "total": 0}
         summary.refresh()
 
     summary()
@@ -1068,9 +1073,13 @@ async def main_page():
 
             async def _load_portfolio():
                 loop = asyncio.get_event_loop()
-                _portfolio_state["data"] = await loop.run_in_executor(
-                    _executor, _portfolio, profile
-                )
+                try:
+                    _portfolio_state["data"] = await loop.run_in_executor(
+                        _executor, _portfolio, profile
+                    )
+                except Exception as e:
+                    logger.error(f"Portfolio load failed: {e}")
+                    _portfolio_state["data"] = None
                 portfolio_content.refresh()
 
             portfolio_content()
@@ -1943,6 +1952,7 @@ async def main_page():
                             all_tickers = set()
                             for p in db.values():
                                 p = _migrate_profile(p)
+                                _clean_dust_holdings(p)
                                 all_tickers.update(p.get("holdings", {}).keys())
                             price_map = {}
                             if all_tickers:
@@ -1958,6 +1968,7 @@ async def main_page():
                             rows = []
                             for e, p in db.items():
                                 p = _migrate_profile(p)
+                                _clean_dust_holdings(p)
                                 mv = 0.0
                                 for t, pos in p.get("holdings", {}).items():
                                     pr = price_map.get(t)
@@ -2054,6 +2065,7 @@ async def main_page():
                             all_tickers = set()
                             for p in db.values():
                                 p = _migrate_profile(p)
+                                _clean_dust_holdings(p)
                                 all_tickers.update(p.get("holdings", {}).keys())
                             price_map = {}
                             if all_tickers:
@@ -2073,6 +2085,7 @@ async def main_page():
                             rows = []
                             for e, p in db.items():
                                 p = _migrate_profile(p)
+                                _clean_dust_holdings(p)
                                 if "email" not in p:
                                     p["email"] = _email_by_hash.get(e, "unknown")
                                 mv = 0.0

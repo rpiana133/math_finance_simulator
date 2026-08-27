@@ -39,9 +39,17 @@ def _migrate_profile(p: dict | None) -> dict | None:
     return p
 
 
+def _clean_dust_holdings(p: dict) -> None:
+    for t in [t for t, h in p.get("holdings", {}).items() if h.get("total_cost", 0) <= 0 or h.get("shares", 0) <= 1e-6]:
+        del p["holdings"][t]
+
+
 def _get(email: str) -> dict | None:
     if email not in _profiles:
         _profiles[email] = _migrate_profile(load_student_profile(email))
+        _p = _profiles[email]
+        if _p is not None:
+            _clean_dust_holdings(_p)
     else:
         # If the cached profile is a fresh empty one, attempt to reload/migrate it
         profile = _profiles[email]
@@ -55,6 +63,7 @@ def _get(email: str) -> dict | None:
                 loaded = load_student_profile(email)
                 if loaded is not None:
                     _profiles[email] = _migrate_profile(loaded)
+                    _clean_dust_holdings(_profiles[email])
     return _profiles[email]
 
 
@@ -88,14 +97,17 @@ def _portfolio(profile: dict) -> dict:
         except Exception:
             pass
         for ticker, pos in hold_items:
+            shares = pos.get("shares", 0)
+            tc = pos.get("total_cost", 0) / 100.0
+            if shares <= 0 or tc <= 0:
+                continue
             price = prices.get(ticker)
             if price is None:
                 continue
-            cv = pos["shares"] * price
+            cv = shares * price
             total_hold += cv
-            tc = pos["total_cost"] / 100.0
             total_cost += tc
-            avg = tc / pos["shares"]
+            avg = tc / shares
             ret = ((price - avg) / avg) * 100
             live.append(
                 {

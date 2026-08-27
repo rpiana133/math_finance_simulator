@@ -173,6 +173,50 @@ def test_execute_sell_removes_holding(mock_fetch):
 
 
 @patch("main.fetch_stock_market_data", return_value=(150.0, None, None))
+def test_execute_sell_dust_removes_holding(mock_fetch):
+    from copy import deepcopy
+
+    from main import _execute_trade
+
+    profile = deepcopy(BASE_PROFILE)
+    # Simulate a near-total sell leaving an extreme dust residue (floating point).
+    profile["holdings"]["AAPL"]["shares"] = 10.0 + 1e-7
+    locks = {}
+    saved = []
+
+    def fake_save(email, p):
+        saved.append((email, p))
+
+    data = {"ticker": "AAPL", "action": "Sell", "shares": 10.0, "cost": 1500.0, "price": 150.0}
+    success, error, event, details = _execute_trade(data, profile, "test@example.com", locks, fake_save, ALL_TICKERS)
+
+    assert success is True
+    assert "AAPL" not in profile["holdings"]
+
+
+@patch("main.fetch_stock_market_data", return_value=(150.0, None, None))
+def test_execute_sell_zero_cost_dust_removes_holding(mock_fetch):
+    from copy import deepcopy
+
+    from main import _execute_trade
+
+    profile = deepcopy(BASE_PROFILE)
+    # A holding where rounding consumed the full cost basis but shares dust remains.
+    profile["holdings"]["AAPL"] = {"shares": 1e-6, "total_cost": 0}
+    locks = {}
+    saved = []
+
+    def fake_save(email, p):
+        saved.append((email, p))
+
+    data = {"ticker": "AAPL", "action": "Sell", "shares": 1e-6, "cost": 0.0002, "price": 150.0}
+    success, error, event, details = _execute_trade(data, profile, "test@example.com", locks, fake_save, ALL_TICKERS)
+
+    assert success is True
+    assert "AAPL" not in profile["holdings"]
+
+
+@patch("main.fetch_stock_market_data", return_value=(150.0, None, None))
 def test_execute_insufficient_shares(mock_fetch):
     from copy import deepcopy
 

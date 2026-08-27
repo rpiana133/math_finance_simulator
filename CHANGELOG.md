@@ -13,6 +13,7 @@
 - All `run_in_executor(None, ...)` replaced with `_executor` (zero remaining)
 
 ### Fixed
+- **Portfolio tab hang from zero-cost "dust" holdings**: a fractional-share sell could leave a residual position with `total_cost == 0` but `shares > 0`, causing `ZeroDivisionError` in `_portfolio()` and freezing the summary bar + Portfolio tab (HJ Yang's LLY, SJ Lee's IVZ). Loaders now skip dust positions, sell-deletion tolerates <1e-6 share residue, and `_clean_dust_holdings()` self-heals on profile load
 - **Unsettled cash excluded from net worth**: standings and admin now use `nw = ((cash + unsettled) / 100) + mv` — previously phantom losses after sells
 - **Session timeout on idle browsing**: `_tick()` wrapped in try/finally; separate 60s heartbeat timer ensures `_touch_session()` fires independently
 - **Async page load**: `_get(email)` wrapped in `run_in_executor` — `main_page()` is now `async def`
