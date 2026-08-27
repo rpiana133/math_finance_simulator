@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import math
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from threading import Lock
 
@@ -72,25 +72,41 @@ def _portfolio(profile: dict) -> dict:
     live = []
     hold_items = list(holdings.items())
     if hold_items:
-        prices = list(_shared_executor.map(lambda t: fetch_stock_market_data(t[0]), hold_items))
-        for (ticker, pos), (price, _, _) in zip(hold_items, prices):
-            if price is not None and not math.isnan(price):
-                cv = pos["shares"] * price
-                total_hold += cv
-                tc = pos["total_cost"] / 100.0
-                total_cost += tc
-                avg = tc / pos["shares"]
-                ret = ((price - avg) / avg) * 100
-                live.append(
-                    {
-                        "Ticker": ticker,
-                        "Shares": round(pos["shares"], 4),
-                        "Avg Price": f"${avg:.2f}",
-                        "Live Price": f"${price:.2f}",
-                        "Value": f"${cv:.2f}",
-                        "Return": ret,
-                    }
-                )
+        futs = {
+            _shared_executor.submit(fetch_stock_market_data, t): t
+            for t, _ in hold_items
+        }
+        prices: dict[str, float] = {}
+        try:
+            for fut in as_completed(futs, timeout=15):
+                try:
+                    price = fut.result()[0]
+                except Exception:
+                    continue
+                if price is not None and not math.isnan(price):
+                    prices[futs[fut]] = price
+        except Exception:
+            pass
+        for ticker, pos in hold_items:
+            price = prices.get(ticker)
+            if price is None:
+                continue
+            cv = pos["shares"] * price
+            total_hold += cv
+            tc = pos["total_cost"] / 100.0
+            total_cost += tc
+            avg = tc / pos["shares"]
+            ret = ((price - avg) / avg) * 100
+            live.append(
+                {
+                    "Ticker": ticker,
+                    "Shares": round(pos["shares"], 4),
+                    "Avg Price": f"${avg:.2f}",
+                    "Live Price": f"${price:.2f}",
+                    "Value": f"${cv:.2f}",
+                    "Return": ret,
+                }
+            )
     total = cash + unsettled + total_hold
     cap = (STARTING_CASH_CENTS + profile.get("total_deposits", 0)) / 100.0
     pl = total_hold - total_cost

@@ -824,7 +824,7 @@ def fetch_full_history(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire()
+    _yf_limiter.acquire(timeout=3)
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
@@ -838,7 +838,7 @@ def get_dividends(ticker: str) -> pd.Series | None:
     cached = _cache_86400.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire()
+    _yf_limiter.acquire(timeout=3)
     cached = _cache_86400.get(key)
     if cached is not None:
         return cached
@@ -847,7 +847,7 @@ def get_dividends(ticker: str) -> pd.Series | None:
     return result
 
 
-_price_executor = ThreadPoolExecutor(max_workers=4)
+_price_executor = ThreadPoolExecutor(max_workers=8)
 
 
 def _fetch_current_price(ticker: str) -> float | None:
@@ -879,7 +879,7 @@ def _fetch_stock_market_data_impl(ticker: str) -> tuple[float | None, Any, str |
         data = None
         for period in ("5d", "1mo", "6mo"):
             data = _flatten_cols(
-                yf.download(ticker, period=period, progress=False, timeout=15)
+                yf.download(ticker, period=period, progress=False, timeout=5)
             )
             if data is not None and not data.empty:
                 break
@@ -904,7 +904,7 @@ def warm_price_cache(tickers: list[str]) -> None:
     # Try current price per ticker first (rate-limited)
     remaining = []
     for t in uncached:
-        _yf_limiter.acquire()
+        _yf_limiter.acquire(timeout=3)
         p = _fetch_current_price(t)
         if p is not None:
             _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
@@ -915,7 +915,7 @@ def warm_price_cache(tickers: list[str]) -> None:
         return
 
     try:
-        _yf_limiter.acquire()
+        _yf_limiter.acquire(timeout=3)
         # Download remaining tickers in a single batch
         data = _flatten_cols(
             yf.download(" ".join(remaining), period="5d", progress=False, timeout=3)
@@ -957,11 +957,15 @@ def _fetch_full_history_impl(ticker: str, period: str = "3mo") -> pd.DataFrame |
 
 def _get_dividends_impl(ticker: str) -> pd.Series | None:
     try:
-        t = yf.Ticker(ticker)
-        divs = t.dividends
-        if divs is None or divs.empty:
-            return None
-        return divs
+        def _get_divs() -> pd.Series | None:
+            t = yf.Ticker(ticker)
+            divs = t.dividends
+            if divs is None or divs.empty:
+                return None
+            return divs
+
+        fut = _price_executor.submit(_get_divs)
+        return fut.result(timeout=5)
     except Exception:
         return None
 
@@ -973,7 +977,7 @@ def get_top_movers(
     cached = _cache_1800.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire()
+    _yf_limiter.acquire(timeout=3)
     cached = _cache_1800.get(key)
     if cached is not None:
         return cached
@@ -989,7 +993,7 @@ def _get_top_movers_impl(
     for i in range(0, len(tickers), max_batch):
         batch = tickers[i : i + max_batch]
         try:
-            _yf_limiter.acquire()
+            _yf_limiter.acquire(timeout=3)
             data = yf.download(" ".join(batch), period="5d", progress=False, timeout=3)
             if data.empty:
                 continue

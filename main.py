@@ -95,6 +95,9 @@ _session_store: dict[str, dict] = {}
 _session_lock = Lock()
 _movers_cache: dict = {"data": [], "loaded": False, "ts": 0.0, "loading": False}
 _MOVERS_TTL = 300.0
+_warm_lock = Lock()
+_warm_state: dict = {"ts": 0.0}
+_WARM_TTL = 60.0
 
 
 def _touch_session():
@@ -711,15 +714,22 @@ async def main_page():
     profile["name"] = name
     profile.setdefault("total_dividends_earned", 0)
 
-    # Warm price cache for current user's holdings and alerts
+    # Warm price cache for current user's holdings and alerts (deduped — cache is shared)
     try:
-        tickers_to_warm = set()
-        for t in profile.get("holdings", {}).keys():
-            tickers_to_warm.add(t)
-        for a in profile.get("alerts", []):
-            tickers_to_warm.add(a["ticker"])
-        if tickers_to_warm:
-            _executor.submit(warm_price_cache, list(tickers_to_warm))
+        import time as _warm_time
+
+        with _warm_lock:
+            if _warm_time.time() - _warm_state["ts"] >= _WARM_TTL:
+                _warm_state["ts"] = _warm_time.time()
+                tickers_to_warm = set()
+                for t in profile.get("holdings", {}).keys():
+                    tickers_to_warm.add(t)
+                for a in profile.get("alerts", []):
+                    tickers_to_warm.add(a["ticker"])
+                if tickers_to_warm:
+                    _executor.submit(warm_price_cache, list(tickers_to_warm))
+                else:
+                    _warm_state["ts"] = 0.0
         # Pre-fill market movers cache — only if not already loaded
         if not _movers_cache["loaded"] and not _movers_cache["loading"]:
             _movers_cache["loading"] = True
