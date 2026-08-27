@@ -2096,6 +2096,7 @@ async def main_page():
                                         "Stock Value": mv,
                                         "Trades": len(p.get("history", [])),
                                         "_holdings": holdings_detail,
+                                        "_history": list(reversed(p.get("history", []))),
                                         "_cash": cash / 100,
                                         "_unsettled": unsettled / 100,
                                     }
@@ -2188,6 +2189,28 @@ async def main_page():
                                             ui.label(price_str).classes("text-sm w-20 text-muted")
                                             ui.label(f"${value:,.2f}").classes("text-sm w-24 text-right")
                                             ui.label(f"{'+'if pnl>=0 else ''}{pnl:,.2f}").classes(f"text-sm w-20 text-right {pnl_cls}")
+                                history = row.get("_history", [])
+                                if history:
+                                    ui.separator().classes("my-2")
+                                    ui.label("Trade History").classes("font-semibold text-sm mt-1 mb-1")
+                                    for h in history:
+                                        htype = h.get("type", "")
+                                        hticker = h.get("ticker", "")
+                                        hshares = h.get("shares", 0)
+                                        hprice = h.get("price", 0)
+                                        htotal = h.get("total", 0)
+                                        hcb = h.get("cost_basis", "")
+                                        htax = h.get("tax", "")
+                                        htime = h.get("time", "")
+                                        badge_cls = "text-positive" if htype == "Buy" else "text-negative"
+                                        line1 = f"{htype} {hshares:.4f} {hticker} @ ${hprice:.2f} = ${htotal:.2f}"
+                                        parts = [line1]
+                                        if hcb != "":
+                                            parts.append(f"Cost basis: ${hcb:.2f}")
+                                        if htax != "" and float(htax) > 0:
+                                            parts.append(f"Tax: ${htax:.2f}")
+                                        parts.append(htime)
+                                        ui.label("  \u00b7  ".join(parts)).classes(f"text-xs {badge_cls}")
                             holdings_dialog.open()
 
                         tbl.on("rowClick", lambda e: _show_holdings(e.args[1] if len(e.args) > 1 else {}))
