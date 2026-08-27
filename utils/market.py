@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pandas as pd
@@ -37,7 +38,7 @@ class _TokenBucket:
             time.sleep(min(wait, 0.5))
 
 
-_yf_limiter = _TokenBucket(capacity=5, rate=2.0)
+_yf_limiter = _TokenBucket(capacity=15, rate=8.0)
 
 
 def _rate_limited(func, *args, **kwargs):
@@ -809,7 +810,7 @@ def fetch_stock_market_data(ticker: str) -> tuple[float | None, Any, str | None]
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire()
+    _yf_limiter.acquire(timeout=3.0)
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
@@ -846,15 +847,23 @@ def get_dividends(ticker: str) -> pd.Series | None:
     return result
 
 
+_price_executor = ThreadPoolExecutor(max_workers=4)
+
+
 def _fetch_current_price(ticker: str) -> float | None:
     try:
-        t = yf.Ticker(ticker)
-        fi = t.fast_info
-        if fi.get("marketState", "") == "REGULAR":
-            for key in ("lastPrice", "regularMarketPrice", "previousClose"):
-                v = fi.get(key)
-                if v is not None:
-                    return float(v)
+        def _get_fast_price() -> float | None:
+            t = yf.Ticker(ticker)
+            fi = t.fast_info
+            if fi is not None and fi.get("marketState", "") == "REGULAR":
+                for key in ("lastPrice", "regularMarketPrice", "previousClose"):
+                    v = fi.get(key)
+                    if v is not None:
+                        return float(v)
+            return None
+
+        fut = _price_executor.submit(_get_fast_price)
+        return fut.result(timeout=5)
     except Exception:
         pass
     return None

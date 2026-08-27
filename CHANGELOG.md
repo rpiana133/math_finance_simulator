@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-08-27
+
+### Performance
+- Thread pool increased from 4 to 16 workers to handle18 simultaneous users
+- Added token-bucket rate limiter (`_TokenBucket`) for yfinance calls — capacity 5, rate 2/sec
+- Replaced per-call `ThreadPoolExecutor` in `_portfolio()` with shared `_shared_executor` (8 workers)
+- GCS database cached for 60s (`get_gcs_database()` TTL cache)
+- GCS HTTP timeouts reduced from 10s to 5s across all 5 calls
+- Shared movers cache with 5-min TTL + atomic loading lock
+- Eliminated duplicate `fetch_stock_market_data` calls in ticker search (merged `_upd_sel` + `_upd_preview`)
+- All `run_in_executor(None, ...)` replaced with `_executor` (zero remaining)
+
+### Fixed
+- **Unsettled cash excluded from net worth**: standings and admin now use `nw = ((cash + unsettled) / 100) + mv` — previously phantom losses after sells
+- **Session timeout on idle browsing**: `_tick()` wrapped in try/finally; separate 60s heartbeat timer ensures `_touch_session()` fires independently
+- **Async page load**: `_get(email)` wrapped in `run_in_executor` — `main_page()` is now `async def`
+- Samsung (`SSNLF`) and SK Hynix (`SKHY`) added to `POPULAR_STOCKS`
+
+### Added
+- Admin holdings dialog now shows full trade history (buys green, sells red) with ticker, shares, price, total, cost basis, tax, and timestamp
+- 30+ new ETFs: Schwab (SCHB, SCHX, SCHA, SCHF, SCHE, SCHZ), Vanguard (VUG, VTV, VO, VB), iShares (IVV, IJR, IEFA, LQD, TIP, MUB, IBB), Invesco (SPLV, SPHQ, RSP, SPUU, SPXL, SH, SDS, SPXS), Xtrackers/ESG (USSG, ESGU, SUSA, SPLG)
+- Multi-select checkboxes + "Remove Selected" button + confirmation dialog for deleting students by name
+- `delete_student_profile_by_key()` in `utils/storage.py`
+- Google Form questionnaire for students (15 questions)
+
 ## 2026-06-10
 
 ### Fixed
