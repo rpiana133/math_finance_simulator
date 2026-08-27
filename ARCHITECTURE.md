@@ -31,11 +31,11 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 │   ├── storage.py           # GCS CRUD + GCS token cache (thread-safe) + HMAC key derivation
 │   └── market.py            # yfinance wrappers: prices, history, dividends, top movers + global TTL caches
 ├── services/
-│   └── profile.py           # Portfolio computation, alert checks, alert management, shared ThreadPoolExecutor(8)
+│   └── profile.py           # Portfolio computation, dust-holding cleanup, alert checks, shared ThreadPoolExecutor(8)
 └── tests/
     ├── test_audit.py        # Audit log format tests (4)
-    ├── test_trading.py      # Trade validation + execution tests (17)
-    └── test_security.py     # Negative security tests (25)
+    ├── test_trading.py      # Trade validation + execution tests (19)
+    └── test_security.py     # Negative security tests (27)
 ```
 
 ## Data Flow
@@ -76,6 +76,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - Holding price lookups in `_portfolio()` reuse `p["prices"]` from `_portfolio()` — avoiding 2N sequential yfinance calls (main-thread rendering bottleneck)
 - Standings/admin loaders batch all unique tickers across students and fetch prices in parallel, then use a `price_map` dict for O(1) lookups
 - `load_student_profile(email)` → dict (cached in `_profiles` dict, auto-migrated via `_migrate_profile()`)
+- `_clean_dust_holdings(profile)` → drops zero-cost/zero-share holdings on load (self-heal for fractional-sell dust) — also applied in all 4 standings/admin loaders
 - `save_student_profile(email, dict)` → writes to GCS + updates cache
 - `get_gcs_database()` → all student profiles (for standings/admin) — cached for 60s
 - `delete_student_profile(email)` → removes a student profile from GCS (teacher admin)
@@ -102,8 +103,9 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - **All monetary values stored as integer cents** — `_cents()` converts float→int, `_fmt()` formats cents→`$X.XX` string. `_migrate_profile()` converts old float-dollar profiles on first load.
 - **In-memory session store** instead of on-disk session files — avoids modifying NiceGUI internal storage, survives across requests with Cloud Run session affinity
 - **HMAC key derivation falls back to SHA-256** when `BLOB_KEY_SECRET` is unset — existing GCS blobs remain readable; one-way migration script not required immediately
-- **Negative security tests** (25 tests in `tests/test_security.py`) cover rate limit, session integrity, balance invariant, OAuth state mismatch, teacher access control, and HMAC key store
-- **Token bucket rate limiter** (`_TokenBucket` in `utils/market.py`) — max 5 concurrent yfinance calls, 2 tokens/sec refill, prevents rate-limit hangs from18 simultaneous users
+- **Negative security tests** (27 tests in `tests/test_security.py`) cover rate limit, session integrity, balance invariant, OAuth state mismatch, teacher access control, and HMAC key store
+- **Token bucket rate limiter** (`_TokenBucket` in `utils/market.py`) — max 15 concurrent yfinance calls with 8 tokens/sec refill (relaxed from 5/2 for 18 concurrent users); all acquires use `timeout=3` to fail fast instead of hanging
+- **Dust-holding defense**: fractional-share sells can leave a residual position with `total_cost == 0` but `shares > 0`, which would crash `_portfolio()` with `ZeroDivisionError`. Guards skip zero-cost/zero-share positions, sell-deletion tolerates `< 1e-6` share residue, and `_clean_dust_holdings()` self-heals profiles on load and in admin/standings loaders
 
 ## Performance & Download Bottleneck Fixes
 - **Lazy-load pattern**: expensive yfinance calls fire via `async` `ui.timer(once=True)` callbacks that use `asyncio.run_in_executor(ThreadPoolExecutor)` to avoid blocking the event loop
@@ -116,7 +118,11 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - **Global executor**: `_executor = ThreadPoolExecutor(max_workers=16)` — increased from 4 to handle18 simultaneous users
 - **Shared portfolio executor**: `_shared_executor = ThreadPoolExecutor(max_workers=8)` in `services/profile.py` — replaces per-call ThreadPoolExecutor creation
 - **TTLCache** on all yfinance calls: 600s for prices (maxsize 2048), 600s for history, 1800s for movers (maxsize 128), 86400s for dividends
-- **Token bucket rate limiter**: `_yf_limiter` with capacity=5, rate=2.0 — prevents yfinance rate-limit hangs; double-cache-check pattern avoids redundant fetches
+- **Token bucket rate limiter**: `_yf_limiter` with capacity=15, rate=8.0 — prevents yfinance rate-limit hangs; double-cache-check pattern avoids redundant fetches; all acquires `timeout=3`
+- **Bounded portfolio fetch**: `_portfolio()` waits on `as_completed(futs, timeout=15)` — a stale holding's ticker is skipped rather than blocking the whole render
+- **Bounded price/dividend fetches**: `_price_executor` (8 workers) wraps `fast_info` and dividend lookups with a 5s timeout so a hung yfinance thread can't strand a worker
+- **Bounded history fallback**: `yf.download` period fallback loop uses 5s timeout per period (down from 15s)
+- **Login warm dedupe**: `warm_price_cache` submitted at most once per 60s (`_warm_lock` + `_warm_state`) — an 18-student login stampede submits a single warm batch instead of 18 redundant ones
 - **GCS database cached**: `get_gcs_database()` uses 60s TTL cache — reduces GCS API calls from admin/standings refreshes
 - **GCS HTTP timeouts reduced**: all 5 GCS HTTP calls use `timeout=5` (down from 10s) — prevents cascade hangs when GCS is slow
 - **Shared movers cache**: global `_movers_cache` with 5-min TTL + atomic loading lock — prevents cross-user duplicate fetches
@@ -131,7 +137,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 |---|---|
 | _(inline)_ | **Macro Indicators** — VIX, CPI (YoY), PPI (YoY), PCE (YoY), DXY — always visible above tabs |
 | Portfolio | Allocation pie chart, holdings pie chart, positions table, trade history |
-| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers. **Sell mode** filters dropdown to owned stocks, shows position info (`📦 Your position: N shares @ $AVG = $VALUE`), and real-time over-limit warnings (`⚠` in red) for insufficient cash (Buy) or exceeding owned shares/value (Sell) |
+| Trade | Stock selector, live price, buy/sell radio, shares/amount input, review order, market movers. **Sell mode** filters dropdown to owned stocks, shows position info (`📦 Your position: N shares @ $AVG = $VALUE`), and real-time over-limit warnings (`⚠` in red) for insufficient cash (Buy) or exceeding owned shares/value (Sell). A sell that leaves `< 1e-6` shares or a $0 cost basis deletes the holding entirely (prevents float-dust positions) |
 | Research | Volatility calculator (std%, range, risk level), Price history (Lightweight Charts v5.2), Finnhub news |
 | Alerts | Add/delete price alerts (above/below target) |
 | Standings | All students sorted by net worth (teacher only) |
@@ -143,7 +149,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - **`get_top_movers(tickers)`** — top gainers/losers by % change (cached 1800s, maxsize 128) — rate-limited
 - **`get_dividends(ticker)`** — dividend history (cached 86400s) — rate-limited
 - **`warm_price_cache(tickers)`** — preloads prices via shared `_shared_executor` in `services/profile.py`
-- **`_TokenBucket`** — token-bucket rate limiter (capacity=5, rate=2.0) prevents yfinance rate-limit hangs
+- **`_TokenBucket`** — token-bucket rate limiter (capacity=15, rate=8.0) prevents yfinance rate-limit hangs
 - **`POPULAR_STOCKS`** includes Samsung (`SSNLF`) and SK Hynix (`SKHY`) among 80+ stocks
 - **`POPULAR_ETFS`** includes 50+ ETFs — Schwab, Vanguard, iShares, Invesco, Direxion, ProShares, Xtrackers
 
@@ -180,10 +186,15 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 | `_tick` | 300s (repeating) | Re-fetches data and refreshes all refreshable sections; wrapped in try/finally to always touch session |
 | `_heartbeat` | 60s (repeating) | Calls `_touch_session()` independently — prevents idle-browsing session timeout |
 
-All blocking callbacks are `async` functions that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. Internal parallelism:
+- **All blocking callbacks are `async` functions** that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. `_load_summary` and `_load_portfolio` wrap the executor call in try/except so a profile anomaly degrades to empty data instead of leaving the tab spinning
+
+Internal parallelism:
 
 - `_fetch_macro()` uses `ThreadPoolExecutor(max_workers=5)` to fetch VIX, 3 FRED series, and DXY concurrently instead of sequentially. Results cached globally (`_MACRO_CACHE`, 290s TTL).
 - `_load_standings()` and `_load_admin()` batch all unique tickers across all student profiles, fetch prices in parallel, then use a `price_map` dict for O(1) lookups — eliminating N×M sequential yfinance calls.
+- `_portfolio()` (in `services/profile.py`) submits holding price fetches to `_shared_executor` and waits via `as_completed(..., timeout=15)` — slow/stale tickers are skipped so a single laggard can't block the render.
+- `_price_executor` (8 workers in `utils/market.py`) bounds `fast_info` and dividend fetches with a 5s timeout so they never hang a worker thread.
+- Login-time `warm_price_cache` is deduplicated via `_warm_lock` + `_warm_state` (60s TTL) — only the first login per 60s submits warm tasks.
 
 ## Refreshable Sections
 - `summary()` — top bar with cash balance, invested, unsettled, dividends, total

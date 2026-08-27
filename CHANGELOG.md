@@ -4,7 +4,7 @@
 
 ### Performance
 - Thread pool increased from 4 to 16 workers to handle18 simultaneous users
-- Added token-bucket rate limiter (`_TokenBucket`) for yfinance calls — capacity 5, rate 2/sec
+- Added token-bucket rate limiter (`_TokenBucket`) for yfinance calls — capacity 15, rate 8/sec (relaxed from 5/2); all acquires `timeout=3`
 - Replaced per-call `ThreadPoolExecutor` in `_portfolio()` with shared `_shared_executor` (8 workers)
 - GCS database cached for 60s (`get_gcs_database()` TTL cache)
 - GCS HTTP timeouts reduced from 10s to 5s across all 5 calls
