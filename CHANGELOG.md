@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-28
+
+### Fixed
+- **Market Movers wedged on "Loading market data..."**: the login pre-warm (`_prewarm_movers`) set `_movers_cache["loading"] = True` but never reset it, so `_load_movers()` returned early forever and the movers cache never populated — for every user, since the cache is module-global. Pre-warm now only warms the yfinance TTL cache; `_load_movers` is the sole owner of the loading flag, and `movers_load_action()` classifies the cache as `refresh`/`wait`/`fetch` so concurrent pages wait (bounded 20s) then refresh instead of dead-ending
+
 ## 2026-08-27
 
 ### Performance

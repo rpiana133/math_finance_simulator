@@ -114,6 +114,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - **Server stays responsive** during yfinance fetches (thread-pool offload)
 - **Pie chart price reuse**: Pie charts use `p["prices"]` from `_portfolio()` instead of calling `fetch_stock_market_data()` for each holding — eliminating 2N main-thread yfinance calls per render
 - **Mover pre-warm alignment**: `_prewarm_movers()` uses the same ticker batching (stock_groups + ETFs) as `_load_movers()` so cache keys align — no duplicate downloads
+- **Mover state machine**: `movers_load_action(cache, now, ttl)` classifies the shared cache as `refresh` / `wait` / `fetch`. `_load_movers` is the sole owner of the `loading` flag: when another worker holds it, the page waits (bounded 20s) then refreshes instead of dead-ending. This prevents the login pre-warm from permanently wedging the module-global cache
 - **Cache warmup offloaded**: `warm_price_cache` runs via `.submit(warm_price_cache, ...)` on the global executor instead of blocking page render
 - **Global executor**: `_executor = ThreadPoolExecutor(max_workers=16)` — increased from 4 to handle18 simultaneous users
 - **Shared portfolio executor**: `_shared_executor = ThreadPoolExecutor(max_workers=8)` in `services/profile.py` — replaces per-call ThreadPoolExecutor creation
@@ -125,7 +126,7 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 - **Login warm dedupe**: `warm_price_cache` submitted at most once per 60s (`_warm_lock` + `_warm_state`) — an 18-student login stampede submits a single warm batch instead of 18 redundant ones
 - **GCS database cached**: `get_gcs_database()` uses 60s TTL cache — reduces GCS API calls from admin/standings refreshes
 - **GCS HTTP timeouts reduced**: all 5 GCS HTTP calls use `timeout=5` (down from 10s) — prevents cascade hangs when GCS is slow
-- **Shared movers cache**: global `_movers_cache` with 5-min TTL + atomic loading lock — prevents cross-user duplicate fetches
+- **Shared movers cache**: global `_movers_cache` with 5-min TTL + atomic loading lock — prevents cross-user duplicate fetches. The login pre-warm only warms the yfinance TTL cache and never touches `_movers_cache`; `_load_movers` alone sets `loading`/`loaded`/`ts`
 - **Ticker search hang fix**: merged `_upd_sel` + `_upd_preview` into single `_on_sel_change` handler; `_upd_preview` reads price from `_sel_price_state` cache instead of re-fetching
 - **Unsettled cash in net worth**: standings and admin `nw = ((cash + unsettled) / 100) + mv` — previously excluded unsettled, causing phantom losses after sells
 - **Fireproof `_tick()`**: try/finally ensures `_touch_session()` always fires — prevents 30-min session timeout if `_portfolio()` throws

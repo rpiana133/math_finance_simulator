@@ -970,6 +970,20 @@ def _get_dividends_impl(ticker: str) -> pd.Series | None:
         return None
 
 
+def movers_load_action(cache: dict, now: float, ttl: float) -> str:
+    """Return the next action for the shared market-movers cache.
+
+    "refresh": cache is loaded and fresh — UI can refresh immediately.
+    "wait":   another worker holds the loading flag — wait for it, then refresh.
+    "fetch":  nothing loaded/stale and no worker in flight — start a fetch.
+    """
+    if cache.get("loaded") and now - cache.get("ts", 0.0) < ttl:
+        return "refresh"
+    if cache.get("loading"):
+        return "wait"
+    return "fetch"
+
+
 def get_top_movers(
     tickers: list[str] | tuple[str, ...],
 ) -> list[tuple[str, str, float, float]]:

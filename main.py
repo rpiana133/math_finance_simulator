@@ -53,6 +53,7 @@ from utils.market import (
     format_ticker_option,
     get_price_source,
     get_top_movers,
+    movers_load_action,
     warm_price_cache,
 )
 from utils.storage import (
@@ -731,9 +732,8 @@ async def main_page():
                     _executor.submit(warm_price_cache, list(tickers_to_warm))
                 else:
                     _warm_state["ts"] = 0.0
-        # Pre-fill market movers cache — only if not already loaded
+        # Pre-fill market movers cache — only warm yfinance TTL; _load_movers owns _movers_cache
         if not _movers_cache["loaded"] and not _movers_cache["loading"]:
-            _movers_cache["loading"] = True
             _executor.submit(_prewarm_movers)
     except Exception as e:
         logger.error(f"Error warming price cache: {e}")
@@ -1381,12 +1381,19 @@ async def main_page():
                     )
 
                     async def _load_movers():
+                        import asyncio as _asyncio
                         import time as _time
                         now = _time.time()
-                        if _movers_cache["loaded"] and (now - _movers_cache["ts"]) < _MOVERS_TTL:
+                        action = movers_load_action(_movers_cache, now, _MOVERS_TTL)
+                        if action == "refresh":
                             movers.refresh()
                             return
-                        if _movers_cache["loading"]:
+                        if action == "wait":
+                            deadline = now + 20
+                            while _movers_cache["loading"] and _time.time() < deadline:
+                                await _asyncio.sleep(0.25)
+                            if _movers_cache["loaded"]:
+                                movers.refresh()
                             return
                         _movers_cache["loading"] = True
                         try:
