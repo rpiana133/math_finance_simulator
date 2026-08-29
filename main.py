@@ -789,6 +789,10 @@ async def main_page():
             logger.error(f"Portfolio summary load failed: {e}")
             _summary_state["data"] = {"cash": 0, "unsettled": 0, "total_hold": 0, "pl": 0, "pl_pct": 0.0, "total": 0}
         summary.refresh()
+        try:
+            positions_info.refresh()
+        except Exception:
+            pass
 
     summary()
     ui.timer(0.1, _load_summary, once=True)
@@ -1339,6 +1343,10 @@ async def main_page():
                 summary.refresh()
                 portfolio_content.refresh()
                 try:
+                    positions_info.refresh()
+                except Exception:
+                    pass
+                try:
                     movers.refresh()
                 except Exception:
                     pass
@@ -1376,126 +1384,67 @@ async def main_page():
                     confirm_card()
 
                 with ui.card().classes("market-movers"):
-                    ui.label("\U0001f4ca Market Movers").classes(
+                    ui.label("\U0001f4c8 Your Positions").classes(
                         "font-bold text-lg mb-3"
                     )
+                    ui.label("Click a position to sell it.").classes(
+                        "text-muted text-xs mb-2"
+                    )
 
-                    async def _load_movers():
-                        import asyncio as _asyncio
-                        import time as _time
-                        now = _time.time()
-                        action = movers_load_action(_movers_cache, now, _MOVERS_TTL)
-                        if action == "refresh":
-                            movers.refresh()
-                            return
-                        if action == "wait":
-                            deadline = now + 20
-                            while _movers_cache["loading"] and _time.time() < deadline:
-                                await _asyncio.sleep(0.25)
-                            if _movers_cache["loaded"]:
-                                movers.refresh()
-                            return
-                        _movers_cache["loading"] = True
-                        try:
-                            def _fetch():
-                                all_data = []
-                                stock_groups = [
-                                    STOCK_TICKERS[i : i + 100]
-                                    for i in range(0, len(STOCK_TICKERS), 100)
-                                ]
-                                for group in stock_groups + [ETF_TICKERS]:
-                                    try:
-                                        all_data.extend(list(get_top_movers(tuple(group))))
-                                    except Exception as e:
-                                        logger.error(
-                                            f"Movers batch error ({len(group)} tickers): {e}"
-                                        )
-                                return all_data
-
-                            loop = asyncio.get_event_loop()
-                            _movers_cache["data"] = await loop.run_in_executor(_executor, _fetch)
-                            _movers_cache["loaded"] = True
-                            _movers_cache["ts"] = _time.time()
-                            movers.refresh()
-                        finally:
-                            _movers_cache["loading"] = False
+                    def _sell_prefill(ticker: str, shares: float):
+                        action.set_value("Sell")
+                        _on_action_change()
+                        sel.set_value(ticker)
+                        mode.set_value("Shares")
+                        shares_in.set_value(shares)
+                        ui.notify(
+                            f"Selling {ticker} ({shares:g} shares) - review and confirm.",
+                            type="info",
+                        )
 
                     @ui.refreshable
-                    def movers():
-                        if not _movers_cache["loaded"]:
-                            ui.label("Loading market data...").classes(
+                    def positions_info():
+                        p = _summary_state["data"]
+                        if p is None:
+                            ui.label("Loading positions...").classes(
                                 "text-muted text-sm"
                             )
-                        else:
-                            for label, items in [
-                                (
-                                    "Stocks",
-                                    [
-                                        x
-                                        for x in _movers_cache["data"]
-                                        if x[0] in STOCK_TICKERS
-                                    ],
-                                ),
-                                (
-                                    "ETFs",
-                                    [
-                                        x
-                                        for x in _movers_cache["data"]
-                                        if x[0] in ETF_TICKERS
-                                    ],
-                                ),
-                            ]:
-                                gainers = [x for x in items if x[3] > 0][:5]
-                                losers = [x for x in items if x[3] < 0][-5:][::-1]
-                                if not gainers and not losers:
-                                    ui.label(f"{label}: No data").classes(
-                                        "text-muted text-xs"
-                                    )
-                                    continue
-                                with ui.column().classes("w-full gap-1 mb-3"):
-                                    if gainers:
-                                        ui.label(f"{label} \u2191").classes(
-                                            "text-xs font-semibold text-positive"
-                                        )
-                                        for tick, n, p, c in gainers:
-                                            with ui.row().classes(
-                                                "w-full items-center justify-between bg-green-50 rounded-lg px-3 py-1.5"
-                                            ):
-                                                ui.label(tick).classes(
-                                                    "text-xs font-bold w-14"
-                                                )
-                                                ui.label(n[:18]).classes(
-                                                    "text-xs text-muted flex-1 truncate"
-                                                )
-                                                ui.label(f"${p:.2f}").classes(
-                                                    "text-xs w-16 text-right"
-                                                )
-                                                ui.label(f"{c:+.2f}%").classes(
-                                                    "text-xs font-semibold w-16 text-right text-positive"
-                                                )
-                                    if losers:
-                                        ui.label(f"{label} \u2193").classes(
-                                            "text-xs font-semibold text-negative mt-1"
-                                        )
-                                        for tick, n, p, c in losers:
-                                            with ui.row().classes(
-                                                "w-full items-center justify-between bg-red-50 rounded-lg px-3 py-1.5"
-                                            ):
-                                                ui.label(tick).classes(
-                                                    "text-xs font-bold w-14"
-                                                )
-                                                ui.label(n[:18]).classes(
-                                                    "text-xs text-muted flex-1 truncate"
-                                                )
-                                                ui.label(f"${p:.2f}").classes(
-                                                    "text-xs w-16 text-right"
-                                                )
-                                                ui.label(f"{c:+.2f}%").classes(
-                                                    "text-xs font-semibold w-16 text-right text-negative"
-                                                )
-                                ui.separator().classes("my-1")
+                            return
+                        live = p.get("live_data", [])
+                        if not live:
+                            ui.label("No open positions.").classes(
+                                "text-muted text-sm"
+                            )
+                            return
+                        for row in live:
+                            tick = row["Ticker"]
+                            ret = row["Return"]
+                            ret_cls = (
+                                "text-positive" if ret >= 0 else "text-negative"
+                            )
+                            with ui.row().classes(
+                                "w-full items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-blue-50"
+                            ).on(
+                                "click",
+                                lambda t=tick, sh=row["Shares"]: _sell_prefill(t, sh),
+                            ):
+                                ui.label(tick).classes("text-xs font-bold w-14")
+                                ui.label(
+                                    f"{row['Shares']:g} sh @ {row['Avg Price']}"
+                                ).classes(
+                                    "text-xs text-muted flex-1 truncate"
+                                )
+                                ui.label(row["Live Price"]).classes(
+                                    "text-xs w-16 text-right"
+                                )
+                                ui.label(row["Value"]).classes(
+                                    "text-xs w-20 text-right font-semibold"
+                                )
+                                ui.label(f"{ret:+.2f}%").classes(
+                                    f"text-xs font-semibold w-16 text-right {ret_cls}"
+                                )
 
-                    movers()
+                    positions_info()
 
         # ── RESEARCH ──
         with ui.tab_panel(tr):
@@ -1708,6 +1657,129 @@ async def main_page():
                     cs_sel.on_value_change(lambda: _chart())
                     vs.on_value_change(lambda: _chart())
 
+            # ══ Research: Market Movers ══
+            with ui.card().classes("w-full"):
+                ui.label("\U0001f4ca Market Movers").classes(
+                    "font-bold text-lg mb-3"
+                )
+
+                async def _load_movers():
+                    import asyncio as _asyncio
+                    import time as _time
+                    now = _time.time()
+                    action = movers_load_action(_movers_cache, now, _MOVERS_TTL)
+                    if action == "refresh":
+                        movers.refresh()
+                        return
+                    if action == "wait":
+                        deadline = now + 20
+                        while _movers_cache["loading"] and _time.time() < deadline:
+                            await _asyncio.sleep(0.25)
+                        if _movers_cache["loaded"]:
+                            movers.refresh()
+                        return
+                    _movers_cache["loading"] = True
+                    try:
+                        def _fetch():
+                            all_data = []
+                            stock_groups = [
+                                STOCK_TICKERS[i : i + 100]
+                                for i in range(0, len(STOCK_TICKERS), 100)
+                            ]
+                            for group in stock_groups + [ETF_TICKERS]:
+                                try:
+                                    all_data.extend(list(get_top_movers(tuple(group))))
+                                except Exception as e:
+                                    logger.error(
+                                        f"Movers batch error ({len(group)} tickers): {e}"
+                                    )
+                            return all_data
+
+                        loop = asyncio.get_event_loop()
+                        _movers_cache["data"] = await loop.run_in_executor(_executor, _fetch)
+                        _movers_cache["loaded"] = True
+                        _movers_cache["ts"] = _time.time()
+                        movers.refresh()
+                    finally:
+                        _movers_cache["loading"] = False
+
+                @ui.refreshable
+                def movers():
+                    if not _movers_cache["loaded"]:
+                        ui.label("Loading market data...").classes(
+                            "text-muted text-sm"
+                        )
+                    else:
+                        for label, items in [
+                            (
+                                "Stocks",
+                                [
+                                    x
+                                    for x in _movers_cache["data"]
+                                    if x[0] in STOCK_TICKERS
+                                ],
+                            ),
+                            (
+                                "ETFs",
+                                [
+                                    x
+                                    for x in _movers_cache["data"]
+                                    if x[0] in ETF_TICKERS
+                                ],
+                            ),
+                        ]:
+                            gainers = [x for x in items if x[3] > 0][:5]
+                            losers = [x for x in items if x[3] < 0][-5:][::-1]
+                            if not gainers and not losers:
+                                ui.label(f"{label}: No data").classes(
+                                    "text-muted text-xs"
+                                )
+                                continue
+                            with ui.column().classes("w-full gap-1 mb-3"):
+                                if gainers:
+                                    ui.label(f"{label} \u2191").classes(
+                                        "text-xs font-semibold text-positive"
+                                    )
+                                    for tick, n, p, c in gainers:
+                                        with ui.row().classes(
+                                            "w-full items-center justify-between bg-green-50 rounded-lg px-3 py-1.5"
+                                        ):
+                                            ui.label(tick).classes(
+                                                "text-xs font-bold w-14"
+                                            )
+                                            ui.label(n[:18]).classes(
+                                                "text-xs text-muted flex-1 truncate"
+                                            )
+                                            ui.label(f"${p:.2f}").classes(
+                                                "text-xs w-16 text-right"
+                                            )
+                                            ui.label(f"{c:+.2f}%").classes(
+                                                "text-xs font-semibold w-16 text-right text-positive"
+                                            )
+                                if losers:
+                                    ui.label(f"{label} \u2193").classes(
+                                        "text-xs font-semibold text-negative mt-1"
+                                    )
+                                    for tick, n, p, c in losers:
+                                        with ui.row().classes(
+                                            "w-full items-center justify-between bg-red-50 rounded-lg px-3 py-1.5"
+                                        ):
+                                            ui.label(tick).classes(
+                                                "text-xs font-bold w-14"
+                                            )
+                                            ui.label(n[:18]).classes(
+                                                "text-xs text-muted flex-1 truncate"
+                                            )
+                                            ui.label(f"${p:.2f}").classes(
+                                                "text-xs w-16 text-right"
+                                            )
+                                            ui.label(f"{c:+.2f}%").classes(
+                                                "text-xs font-semibold w-16 text-right text-negative"
+                                            )
+                                ui.separator().classes("my-1")
+
+                movers()
+
             # ══ Research: News ══
             ui.separator().classes("mt-4")
             with ui.card().classes("w-full"):
@@ -1825,6 +1897,10 @@ async def main_page():
 
                 def _on_tab_change(e):
                     if e.value == "\U0001f52c Research":
+                        try:
+                            _load_movers()
+                        except Exception:
+                            logger.debug("movers load on Research tab open failed")
                         ui.run_javascript("""
                             var el = document.getElementById('tvchart');
                             if (!el) return;
@@ -2338,7 +2414,6 @@ async def main_page():
 
     # ── Lazy loaders ──────────────────────────────────────
     ui.timer(0.1, _load_portfolio, once=True)
-    ui.timer(0.1, _load_movers, once=True)
     if is_teacher(email):
         ui.timer(0.1, _load_standings, once=True)
     if is_teacher(email):
@@ -2353,6 +2428,10 @@ async def main_page():
             summary.refresh()
             _portfolio_state["data"] = d
             portfolio_content.refresh()
+            try:
+                positions_info.refresh()
+            except Exception:
+                pass
             try:
                 standings_content.refresh()
             except Exception:
