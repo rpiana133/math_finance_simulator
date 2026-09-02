@@ -726,7 +726,7 @@ def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
 
 
 # ── Main page ────────────────────────────────────────────
-def _render_curfew_block():
+def _render_curfew_block(show_teacher_login: bool = False):
     with ui.column().classes("items-center justify-center min-h-screen gap-6"):
         ui.label("\U0001f515").classes("text-6xl")
         ui.label("Math Finance Simulator").classes("text-3xl font-bold text-gray-800")
@@ -734,9 +734,27 @@ def _render_curfew_block():
         ui.label("Available 8:00 AM \u2013 9:00 PM (Chamorro Time).").classes(
             "text-gray-500"
         )
+        if show_teacher_login:
+            with ui.column().classes("items-center gap-2"):
+                ui.label("Teachers: use the button below to sign in during off hours.").classes(
+                    "text-sm text-gray-400"
+                )
+                ui.button("Sign in as teacher", on_click=_teacher_curfew_login).classes(
+                    "bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                )
         with ui.row().classes("gap-4 mt-8 text-sm text-gray-400"):
             ui.link("Privacy Policy", "/privacy")
             ui.link("Terms of Service", "/terms")
+
+
+def _teacher_curfew_login():
+    """Redirect a (presumably teacher) visitor to Google auth during curfew."""
+    request = ui.context.client.request
+    redirect_uri = _get_redirect_uri(request)
+    login_url, state, code_verifier = get_auth_url(redirect_uri=redirect_uri)
+    app.storage.user["oauth_state"] = state
+    app.storage.user["oauth_code_verifier"] = code_verifier
+    ui.navigate.to(login_url)
 
 
 @ui.page("/")
@@ -748,6 +766,9 @@ async def main_page():
         app.storage.user.clear()
 
     if not _get_session("authenticated"):
+        if _in_curfew():
+            _render_curfew_block(show_teacher_login=True)
+            return
         request = ui.context.client.request
         redirect_uri = _get_redirect_uri(request)
         login_url, state, code_verifier = get_auth_url(redirect_uri=redirect_uri)
