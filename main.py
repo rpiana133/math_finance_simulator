@@ -56,6 +56,7 @@ from utils.market import (
     movers_load_action,
     warm_price_cache,
 )
+from services.sheets import save_weekly_snapshot
 from utils.storage import (
     _safe_email_key,
     delete_student_profile,
@@ -495,7 +496,7 @@ async def callback_route(code: str, request: Request, state: str = None):
         )
     try:
         code_verifier = app.storage.user.get("oauth_code_verifier", "")
-        user_info = exchange_code(code, code_verifier, redirect_uri=redirect_uri)
+        user_info, oauth_creds = exchange_code(code, code_verifier, redirect_uri=redirect_uri)
         app.storage.user["oauth_state"] = ""
         app.storage.user["oauth_code_verifier"] = ""
         email = user_info["email"]
@@ -516,6 +517,7 @@ async def callback_route(code: str, request: Request, state: str = None):
                 "name": user_info.get("name", "Student"),
                 "ip": client_ip,
                 "last_activity": datetime.utcnow().timestamp(),
+                "oauth_creds": oauth_creds,
             }
         app.storage.user["_token"] = token
         # Remove sensitive fields from the on-disk session file
@@ -877,6 +879,68 @@ async def main_page():
     """,
         sanitize=False,
     )
+
+    # ── Google Sheets weekly tracker ──
+    _sheet_state: dict = {"busy": False, "msg": ""}
+
+    async def _do_save_to_sheets():
+        from services.sheets import save_weekly_snapshot
+
+        if _sheet_state["busy"]:
+            return
+        oauth_creds = _get_session("oauth_creds")
+        if not oauth_creds:
+            _sheet_state["msg"] = (
+                "Re-sign in to enable Google Sheets (a new permission is required once)."
+            )
+            _sheet_status.refresh()
+            return
+        _sheet_state["busy"] = True
+        _sheet_status.refresh()
+        if _summary_state.get("data") is None:
+            _sheet_state["busy"] = False
+            _sheet_state["msg"] = "Portfolio is still loading — try again in a moment."
+            _sheet_status.refresh()
+            return
+        try:
+            existing_id = profile.get("spreadsheet_id")
+            loop = asyncio.get_event_loop()
+            info, url = await loop.run_in_executor(
+                _executor,
+                save_weekly_snapshot,
+                oauth_creds,
+                _summary_state["data"],
+                existing_id,
+            )
+            if info.get("spreadsheet_id") != existing_id:
+                profile["spreadsheet_id"] = info["spreadsheet_id"]
+                await loop.run_in_executor(_executor, _save, email, profile)
+            action = "Updated" if info["action"] == "updated" else "Saved"
+            _sheet_state["msg"] = (
+                f"{action} your weekly snapshot ({info['week']}). Link: {url}"
+            )
+        except Exception as e:
+            logger.error(f"Sheets export error: {e}")
+            _sheet_state["msg"] = f"Sheet export failed: {e}"
+        finally:
+            _sheet_state["busy"] = False
+            _sheet_status.refresh()
+
+    @ui.refreshable
+    def _sheet_status():
+        with ui.row().classes("items-center gap-3 mt-2 px-4"):
+            ui.button(
+                "Save to Google Sheets",
+                on_click=_do_save_to_sheets,
+            ).props("dense").classes("bg-blue-600 text-white")
+            if _sheet_state["busy"]:
+                ui.spinner().props("size=20px")
+            elif _sheet_state["msg"]:
+                ui.label(_sheet_state["msg"]).classes("text-sm text-gray-600").props(
+                    "style='max-width:460px;word-break:break-word'"
+                )
+
+    _sheet_status()
 
     # ── Summary Bar ──
     _summary_state = {"data": None}

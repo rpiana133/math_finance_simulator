@@ -27,11 +27,12 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 ├── ARCHITECTURE.md          # This file
 ├── security_threat_model.md # STRIDE threat model
 ├── utils/
-│   ├── auth.py              # OAuth URL generation, token exchange, hd validation, teacher check
+│   ├── auth.py              # OAuth URL generation, token exchange (returns user_info + credentials_dict), hd validation, teacher check
 │   ├── storage.py           # GCS CRUD + GCS token cache (thread-safe) + HMAC key derivation
 │   └── market.py            # yfinance wrappers: prices, history, dividends, top movers + global TTL caches
 ├── services/
-│   └── profile.py           # Portfolio computation, dust-holding cleanup, alert checks, shared ThreadPoolExecutor(8)
+│   ├── profile.py           # Portfolio computation, dust-holding cleanup, alert checks, shared ThreadPoolExecutor(8)
+│   └── sheets.py            # Google Sheets weekly tracker: snapshot creation, ISO-week dedup, row append/update
 └── tests/
     ├── test_audit.py        # Audit log format tests (4)
     ├── test_trading.py      # Trade validation + execution tests (19)
@@ -51,11 +52,17 @@ Browser ←→ NiceGUI server ←→ Google OAuth (login) — hd domain validati
 2. User redirected to Google OAuth consent screen
 3. Google redirects to `/callback?code=...&state=...`
 4. `callback_route()` validates state match, enforces rate limit (5 req/min/IP)
-5. `exchange_code()` trades code for tokens, fetches user info, validates `hd` against `GOOGLE_HD`
-6. Opaque `secrets.token_urlsafe(32)` created; session data stored in `_session_store[token]`
+5. `exchange_code()` trades code for tokens, fetches user info, validates `hd` against `GOOGLE_HD`; returns `(user_info, credentials_dict)` tuple — credentials_dict includes the OAuth token set serialized as JSON (token, refresh_token, token_uri, client_id, client_secret, scopes), used to call the Sheets API on the student's own behalf
+6. Opaque `secrets.token_urlsafe(32)` created; session data stored in `_session_store[token]`, including `oauth_creds` (the JSON-serializable credentials dict)
 7. Only the token survives in `app.storage.user` (on-disk JSON); all other session fields stripped
 8. `is_teacher(email)` checks if email matches a comma-separated list in `TEACHER_EMAILS`
 9. **Curfew gate** — if `_in_curfew()` is true (9pm–8am Guam) and the user is not a teacher, the login is rejected. Logged-out visitors see a "class closed" front page; authenticated students are signed out
+
+OAuth scopes granted (on consent screen):
+- `classroom.coursework.students` — read/write classroom coursework
+- `userinfo.email` / `userinfo.profile` — identify the logged-in student
+- `spreadsheets` — create/update the student's own "My Stock Tracker" sheet
+- `openid` — OpenID Connect
 
 ## Session Store
 - **In-memory dict** `_session_store: dict[str, dict]` — keyed by opaque token, process-local
@@ -181,6 +188,31 @@ FRED data fetched via `fred.stlouisfed.org/graph/fredgraph.csv?id={series}` — 
 - Displayed in Research tab below chart, updates on ticker selection
 - Free tier: 60 calls/minute
 
+## Google Sheets Weekly Tracker
+Students can save a weekly snapshot of their portfolio to a personal Google Sheet via the **"Save to Google Sheets"** button in the top bar.
+
+### How it works
+1. On first export, a **"My Stock Tracker" spreadsheet** is created in the student's Google Drive (via `spreadsheets.create`), and the spreadsheet ID is persisted in `profile["spreadsheet_id"]` in their GCS profile
+2. The student's own OAuth token (`_session_store[token]["oauth_creds"]`) carries the `spreadsheets` scope; Sheets API calls run on behalf of the student using their own credentials (not a service account)
+3. On click, `save_weekly_snapshot(oauth_creds, portfolio, spreadsheet_id)` runs in the executor thread pool:
+   - Builds a row for the current ISO week (e.g. `2026-W36`): `[week_key, date, holdings_summary, ...]`
+   - Holdings are compressed into one cell as `ticker:shares:avg:live:value | ...`
+   - `_existing_weeks()` scans column A for an existing row with the same week key
+   - **Same week → update in place** (overwrite that row); **new week → append** after the last data row
+4. The spreadsheet ID is saved to the profile on first creation; subsequent exports reuse it (avoids Drive API scope entirely — only `spreadsheets` scope is needed)
+
+### Sheet columns
+| A | B | C | D | E | F | G | H | I |
+|---|---|---|---|---|---|---|---|---|
+| Week | Date | Ticker | Shares | Avg Price | Live Price | Value | Cash | Net Worth |
+
+### Key design decisions
+- **No Drive API scope** — `drive.files().list()` is not used; the spreadsheet ID is stored in the student's GCS profile instead, avoiding the need to add a Drive scope to the OAuth consent screen
+- **Manual trigger only** — no automatic weekly cron; students click the button when they want a snapshot
+- **Per-student sheet** — each student owns one sheet; the app creates it on first use and never needs to find it again
+- **In-memory session store for tokens** — `oauth_creds` lives in `_session_store` (not on disk); survives requests via session affinity but is lost on instance recycle (same ephemeral behavior as other session fields)
+- **Scope bootstrapping**: existing students who logged in before the `spreadsheets` scope was added must re-login to pick it up. If the `spreadsheets` scope is missing from their token, the Sheets button shows a prompt to re-sign in
+
 ## Timer Architecture
 All timers are created at the `main_page()` top level (outside refreshable functions and tab panels) to ensure stable parent slots:
 
@@ -218,6 +250,7 @@ Internal parallelism:
 - `movers()` — market movers gainers/losers lists (inside Trade tab)
 - `confirm_card()` — trade confirmation card (inside Trade tab)
 - `alert_list()` — alert list (inside Alerts tab)
+- `_sheet_status()` — Google Sheets export button + spinner + status message (top bar, below summary)
 
 ## Chart Initialization (Lightweight Charts v5.2)
 - CDN script loaded at module level via `ui.add_head_html(shared=True)` — never inside page functions

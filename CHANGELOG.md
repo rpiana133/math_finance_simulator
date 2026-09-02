@@ -6,6 +6,7 @@
 - **Curfew block**: the simulator is unavailable 9pm–8am (Chamorro Time), enforced server-side so it can't be bypassed via client JS. Students get a "market closed" front page with a teacher sign-in path; new student logins are rejected during curfew; already-open student tabs crossing 9pm are signed out. Teachers (`TEACHER_EMAILS`) are exempt.
 - **15-minute idle disconnect**: the browser reports real user activity (mousemove/keydown/click/touch/wheel) to a new `/_activity` endpoint; sessions with no real activity for 15 minutes are signed out automatically. Teachers are exempt.
 - **Artifact Registry cleanup policy**: `cloud-run-source-deploy` keeps only the 3 newest images per deploy, deleting the ~27 orphaned digests that had been accumulating ~$1/mo in storage.
+- **Google Sheets weekly tracker**: "Save to Google Sheets" button in the top bar writes a portfolio snapshot to a personal spreadsheet in the student's Google Drive. First click creates a "My Stock Tracker" sheet; subsequent clicks append a new row per ISO week or update in place if the same week is saved again. The spreadsheet ID is persisted in the student's GCS profile to avoid needing the Drive API scope. OAuth scope `spreadsheets` added to the consent screen; existing students must re-login once to pick up the new scope.
 
 ### Performance
 - Both the curfew block and idle disconnect drive idle Cloud Run instances to zero after school hours, cutting idle billable instance time and Cloud Run spend.
