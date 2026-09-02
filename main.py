@@ -18,7 +18,7 @@ import requests
 import yfinance as yf
 from cachetools import TTLCache
 from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from nicegui import app, ui
 
 from services.profile import (
@@ -101,6 +101,25 @@ _warm_lock = Lock()
 _warm_state: dict = {"ts": 0.0}
 _WARM_TTL = 60.0
 
+# Curfew: app unavailable outside classroom hours (Guam = UTC+10, no DST).
+# Closed window: 11:00 UTC -> 22:00 UTC (9pm -> 8am next day Guam time).
+_CURFEW_OPEN_UTC_HOUR = 22   # 8:00 AM Guam
+_CURFEW_CLOSE_UTC_HOUR = 11  # 9:00 PM Guam (day before)
+_IDLE_TIMEOUT = 900          # 15 minutes of real user inactivity -> disconnect
+
+
+def _in_curfew(utc_now: datetime | None = None) -> bool:
+    """True if Guam local time is inside 9pm-8am (closed window).
+
+    Open (allows access): 22:00 UTC -> 11:00 UTC next day (8am-9pm Guam).
+    Closed: 11:00 UTC -> 22:00 UTC (9pm-8am Guam).
+    UTC-10 = Guam with no DST, so a fixed UTC hour window holds year-round.
+    """
+    utc_now = utc_now or datetime.utcnow()
+    hour = utc_now.hour
+    return _CURFEW_CLOSE_UTC_HOUR <= hour < _CURFEW_OPEN_UTC_HOUR
+
+
 
 def _touch_session():
     token = app.storage.user.get("_token", "")
@@ -109,6 +128,16 @@ def _touch_session():
             session = _session_store.get(token)
             if session:
                 session["last_activity"] = datetime.utcnow().timestamp()
+
+
+def _touch_client_activity():
+    """Record real, user-driven client activity (distinct from timer pings)."""
+    token = app.storage.user.get("_token", "")
+    if token:
+        with _session_lock:
+            session = _session_store.get(token)
+            if session:
+                session["last_client_activity"] = datetime.utcnow().timestamp()
 
 
 def _get_session(key: str, default=None):
@@ -469,6 +498,16 @@ async def callback_route(code: str, request: Request, state: str = None):
         user_info = exchange_code(code, code_verifier, redirect_uri=redirect_uri)
         app.storage.user["oauth_state"] = ""
         app.storage.user["oauth_code_verifier"] = ""
+        email = user_info["email"]
+        if _in_curfew() and not is_teacher(email):
+            _audit("LOGIN_BLOCKED_CURFEW", email, ip=client_ip)
+            return HTMLResponse(
+                """
+                <h2 style="color:#ef4444;font-family:sans-serif">Market closed</h2>
+                <p style="font-family:sans-serif;color:#6b7280">The simulator is available 8:00 AM &ndash; 9:00 PM (Chamorro Time). Please try again then.</p>
+                <a href="/" style="color:#2563eb">Back to app</a>
+            """
+            )
         token = secrets.token_urlsafe(32)
         with _session_lock:
             _session_store[token] = {
@@ -506,6 +545,22 @@ async def logout_route():
     app.storage.user.clear()
     _audit("LOGOUT", app.storage.user.get("email", "anonymous"))
     return RedirectResponse("/")
+
+
+@app.post("/_activity")
+async def activity_route(request: Request):
+    """Record real client activity (mousemove/keydown/click/touch) for idle tracking."""
+    try:
+        body = await request.json()
+        token = (body or {}).get("token", "")
+        if token:
+            with _session_lock:
+                session = _session_store.get(token)
+                if session:
+                    session["last_client_activity"] = datetime.utcnow().timestamp()
+    except Exception:
+        pass
+    return Response(status_code=204)
 
 
 # ── Legal pages ──────────────────────────────────────────
@@ -575,6 +630,13 @@ def terms_page():
                     [
                         "Use your school-provided Google Workspace account.",
                         "Do not access other users' data.",
+                    ],
+                ),
+                (
+                    "Access Hours",
+                    [
+                        "The simulator is available 8:00 AM \u2013 9:00 PM (Chamorro Time).",
+                        "Sessions idle for more than 15 minutes are automatically signed out.",
                     ],
                 ),
             ]:
@@ -664,6 +726,19 @@ def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
 
 
 # ── Main page ────────────────────────────────────────────
+def _render_curfew_block():
+    with ui.column().classes("items-center justify-center min-h-screen gap-6"):
+        ui.label("\U0001f515").classes("text-6xl")
+        ui.label("Math Finance Simulator").classes("text-3xl font-bold text-gray-800")
+        ui.label("The market is closed for the day.").classes("text-gray-500 text-lg")
+        ui.label("Available 8:00 AM \u2013 9:00 PM (Chamorro Time).").classes(
+            "text-gray-500"
+        )
+        with ui.row().classes("gap-4 mt-8 text-sm text-gray-400"):
+            ui.link("Privacy Policy", "/privacy")
+            ui.link("Terms of Service", "/terms")
+
+
 @ui.page("/")
 async def main_page():
     now = datetime.utcnow().timestamp()
@@ -697,7 +772,34 @@ async def main_page():
     # ── Load profile ──
     _touch_session()
     email = _get_session("email")
+    if _in_curfew() and not is_teacher(email):
+        _render_curfew_block()
+        return
     name = _get_session("name", "Student")
+    _token = app.storage.user.get("_token", "")
+    _touch_client_activity()
+    ui.run_javascript(
+        f"""
+        (function() {{
+            var tok = {json.dumps(_token)};
+            var pending = false;
+            var report = function() {{
+                if (pending) return;
+                pending = true;
+                fetch('/_activity', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{token: tok}})
+                }}).finally(function() {{ pending = false; }});
+            }};
+            var evs = ['mousemove','keydown','click','touchstart','wheel'];
+            for (var i = 0; i < evs.length; i++) {{
+                window.addEventListener(evs[i], report, {{passive: true}});
+            }}
+            if (document.visibilityState === 'visible') report();
+        }})();
+        """
+    )
     loop = asyncio.get_event_loop()
     profile = await loop.run_in_executor(_executor, _get, email)
     if profile is None:
@@ -2461,6 +2563,28 @@ async def main_page():
             ui.navigate.to("/")
 
     ui.timer(60, _check_session_timeout, active=True)
+
+    async def _check_idle_timeout():
+        if not _get_session("authenticated"):
+            return
+        last_client = _get_session("last_client_activity", 0)
+        if (
+            datetime.utcnow().timestamp() - last_client > _IDLE_TIMEOUT
+            and not is_teacher(email)
+        ):
+            _clear_session()
+            app.storage.user.clear()
+            ui.navigate.to("/")
+
+    ui.timer(30, _check_idle_timeout, active=True)
+
+    async def _check_curfew_kick():
+        if _in_curfew() and not is_teacher(email) and _get_session("authenticated"):
+            _clear_session()
+            app.storage.user.clear()
+            ui.navigate.to("/")
+
+    ui.timer(60, _check_curfew_kick, active=True)
 
 
 # ── Security middleware ───────────────────────────────────

@@ -186,6 +186,9 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 | `_load_admin` | 0.1s (once) | Loads all profiles for Teacher Admin table (teacher only) |
 | `_tick` | 300s (repeating) | Re-fetches data and refreshes all refreshable sections; wrapped in try/finally to always touch session |
 | `_heartbeat` | 60s (repeating) | Calls `_touch_session()` independently — prevents idle-browsing session timeout |
+| `_check_session_timeout` | 60s (repeating) | Clears session + redirects to `/` if `last_activity` > 30 min |
+| `_check_idle_timeout` | 30s (repeating) | Clears session + redirects to `/` if `last_client_activity` > 15 min (real user activity only; teachers exempt) |
+| `_check_curfew_kick` | 60s (repeating) | Clears session + redirects to `/` when curfew starts (9pm Guam); teachers exempt |
 
 - **All blocking callbacks are `async` functions** that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. `_load_summary` and `_load_portfolio` wrap the executor call in try/except so a profile anomaly degrades to empty data instead of leaving the tab spinning
 
