@@ -72,8 +72,6 @@ def compute_rows() -> list[dict]:
         logger.warning("No student profiles found in GCS.")
         return []
 
-    db.pop(TEACHER_EMAIL, None)
-
     # Migrate + clean every profile up front so math matches the app.
     profiles = []
     for _key, p in db.items():
@@ -82,6 +80,9 @@ def compute_rows() -> list[dict]:
         email = _student_email(p)
         if not email:
             logger.warning(f"Skipping profile with no email (key={_key!r})")
+            continue
+        if email == TEACHER_EMAIL:
+            logger.info(f"Skipping teacher account {email}")
             continue
         profiles.append((email, p))
 
