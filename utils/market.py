@@ -40,6 +40,12 @@ class _TokenBucket:
 
 _yf_limiter = _TokenBucket(capacity=15, rate=8.0)
 
+# yfinance is not thread-safe: concurrent yf.Ticker(...).fast_info / yf.download
+# calls from _portfolio()'s shared executor cross-contaminate, returning the same
+# wrong price for many different tickers. Serialize actual yfinance reads with a
+# module-level reentrant lock so each ticker gets its own correct price.
+_yf_lock = threading.RLock()
+
 
 def _rate_limited(func, *args, **kwargs):
     """Call *func* while respecting the global yfinance rate limit.
@@ -810,13 +816,14 @@ def fetch_stock_market_data(ticker: str) -> tuple[float | None, Any, str | None]
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire(timeout=3.0)
-    cached = _cache_600.get(key)
-    if cached is not None:
-        return cached
-    result = _fetch_stock_market_data_impl(ticker)
-    _cache_600[key] = result
-    return result
+    with _yf_lock:
+        _yf_limiter.acquire(timeout=3.0)
+        cached = _cache_600.get(key)
+        if cached is not None:
+            return cached
+        result = _fetch_stock_market_data_impl(ticker)
+        _cache_600[key] = result
+        return result
 
 
 def fetch_full_history(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
@@ -824,13 +831,14 @@ def fetch_full_history(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
     cached = _cache_600.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire(timeout=3)
-    cached = _cache_600.get(key)
-    if cached is not None:
-        return cached
-    result = _fetch_full_history_impl(ticker, period)
-    _cache_600[key] = result
-    return result
+    with _yf_lock:
+        _yf_limiter.acquire(timeout=3)
+        cached = _cache_600.get(key)
+        if cached is not None:
+            return cached
+        result = _fetch_full_history_impl(ticker, period)
+        _cache_600[key] = result
+        return result
 
 
 def get_dividends(ticker: str) -> pd.Series | None:
@@ -838,13 +846,14 @@ def get_dividends(ticker: str) -> pd.Series | None:
     cached = _cache_86400.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire(timeout=3)
-    cached = _cache_86400.get(key)
-    if cached is not None:
-        return cached
-    result = _get_dividends_impl(ticker)
-    _cache_86400[key] = result
-    return result
+    with _yf_lock:
+        _yf_limiter.acquire(timeout=3)
+        cached = _cache_86400.get(key)
+        if cached is not None:
+            return cached
+        result = _get_dividends_impl(ticker)
+        _cache_86400[key] = result
+        return result
 
 
 _price_executor = ThreadPoolExecutor(max_workers=8)
@@ -901,46 +910,47 @@ def warm_price_cache(tickers: list[str]) -> None:
     if not uncached:
         return
 
-    # Try current price per ticker first (rate-limited)
-    remaining = []
-    for t in uncached:
-        _yf_limiter.acquire(timeout=3)
-        p = _fetch_current_price(t)
-        if p is not None:
-            _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
-            _price_source[t] = "live"
-        else:
-            remaining.append(t)
-    if not remaining:
-        return
-
-    try:
-        _yf_limiter.acquire(timeout=3)
-        # Download remaining tickers in a single batch
-        data = _flatten_cols(
-            yf.download(" ".join(remaining), period="5d", progress=False, timeout=3)
-        )
-        if data.empty:
+    with _yf_lock:
+        # Try current price per ticker first (rate-limited)
+        remaining = []
+        for t in uncached:
+            _yf_limiter.acquire(timeout=3)
+            p = _fetch_current_price(t)
+            if p is not None:
+                _cache_600[f"price_{t}"] = (p, None, get_company_name(t))
+                _price_source[t] = "live"
+            else:
+                remaining.append(t)
+        if not remaining:
             return
 
-        # Loop through each ticker and extract its latest price
-        for t in remaining:
-            try:
-                if len(remaining) == 1:
-                    close_df = data["Close"]
-                else:
-                    close_df = data["Close"][t]
+        try:
+            _yf_limiter.acquire(timeout=3)
+            # Download remaining tickers in a single batch
+            data = _flatten_cols(
+                yf.download(" ".join(remaining), period="5d", progress=False, timeout=3)
+            )
+            if data.empty:
+                return
 
-                close_series = close_df.squeeze()
-                valid_closes = close_series.dropna()
-                if not valid_closes.empty:
-                    price = float(valid_closes.iloc[-1])
-                    _cache_600[f"price_{t}"] = (price, None, get_company_name(t))
-                    _price_source[t] = "close"
-            except Exception:
-                continue
-    except Exception:
-        pass
+            # Loop through each ticker and extract its latest price
+            for t in remaining:
+                try:
+                    if len(remaining) == 1:
+                        close_df = data["Close"]
+                    else:
+                        close_df = data["Close"][t]
+
+                    close_series = close_df.squeeze()
+                    valid_closes = close_series.dropna()
+                    if not valid_closes.empty:
+                        price = float(valid_closes.iloc[-1])
+                        _cache_600[f"price_{t}"] = (price, None, get_company_name(t))
+                        _price_source[t] = "close"
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
 
 def _fetch_full_history_impl(ticker: str, period: str = "3mo") -> pd.DataFrame | None:
@@ -991,13 +1001,14 @@ def get_top_movers(
     cached = _cache_1800.get(key)
     if cached is not None:
         return cached
-    _yf_limiter.acquire(timeout=3)
-    cached = _cache_1800.get(key)
-    if cached is not None:
-        return cached
-    result = _get_top_movers_impl(tickers)
-    _cache_1800[key] = result
-    return result
+    with _yf_lock:
+        _yf_limiter.acquire(timeout=3)
+        cached = _cache_1800.get(key)
+        if cached is not None:
+            return cached
+        result = _get_top_movers_impl(tickers)
+        _cache_1800[key] = result
+        return result
 
 
 def _get_top_movers_impl(

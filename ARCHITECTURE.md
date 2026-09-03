@@ -147,6 +147,7 @@ OAuth scopes granted (on consent screen):
 - **Cost motivation**: curfew + idle disconnect drive idle Cloud Run instances to 0 outside class hours, cutting idle billable instance time and monthly spend (the app had instances alive all night from students' open tabs)
 - **Artifact Registry cleanup policy**: the `cloud-run-source-deploy` repository keeps only the 3 newest image digests per deploy (cleanup policy `keep-latest-3`), purging the orphaned untagged images that had been accumulating storage cost each deploy
 - **Async page load**: `_get(email)` wrapped in `run_in_executor` — `main_page()` is `async def`, no longer blocks event loop
+- **yfinance thread-safety**: yfinance is not thread-safe — previously, concurrent `yf.Ticker(...).fast_info` / `yf.download` calls from the shared executors cross-contaminated, with many different tickers returning the same wrong price and inflating net worth. All yfinance reads (`fetch_stock_market_data`, `fetch_full_history`, `get_dividends`, `warm_price_cache`, `get_top_movers`) are now serialized behind a module-level reentrant lock (`_yf_lock`), so each ticker gets its own correct price even under concurrency
 
 ## Tabs
 | Tab | Content |
