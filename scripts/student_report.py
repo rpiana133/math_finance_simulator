@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""One-off: list all students + net worth + return, sorted by the leading
-number in each student's email username (ascending).
+"""One-off: list all students + account (net worth) + return, sorted by the
+leading number in each student's email username (ascending).
 
-Reads student profiles from the app's GCS bucket and writes a CSV report.
+Reads student profiles from the app's GCS bucket and computes each account's
+net worth using the SAME `_portfolio()` the app uses for the summary bar /
+Portfolio tab, so the figures match what students see in the app. Writes a CSV.
 
 Prerequisites (set these env vars or the script will exit):
     GCS_SERVICE_ACCOUNT   JSON string of the GCS service account (from Secret
                           Manager secret GCS_SERVICE_ACCOUNT)
     BLOB_KEY_SECRET       HMAC blob-key secret (Secret Manager BLOB_KEY_SECRET)
-    FINNHUB_API_KEY       optional; only used if not provided (news is not
-                          needed for this report, safe to omit)
 
 Usage:
     export GCS_SERVICE_ACCOUNT="$(
@@ -62,9 +62,8 @@ def _student_email(profile: dict) -> str | None:
 
 
 def compute_rows() -> list[dict]:
-    from services.profile import _clean_dust_holdings, _migrate_profile
+    from services.profile import _clean_dust_holdings, _migrate_profile, _portfolio
     from utils.helpers import STARTING_CASH_CENTS
-    from utils.market import fetch_stock_market_data
     from utils.storage import get_gcs_database
 
     db = get_gcs_database()
@@ -86,33 +85,13 @@ def compute_rows() -> list[dict]:
             continue
         profiles.append((email, p))
 
-    # Batch-fetch all unique tickers' live prices in parallel (like the app).
-    all_tickers = {t for _e, p in profiles for t in p.get("holdings", {})}
-    price_map: dict[str, float] = {}
-    if all_tickers:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = {ex.submit(fetch_stock_market_data, t): t for t in all_tickers}
-            for fut in as_completed(futs, timeout=60):
-                t = futs[fut]
-                try:
-                    price = fut.result(timeout=10)[0]
-                except Exception:
-                    continue
-                if price is not None:
-                    price_map[t] = price
-
+    # Use the app's own portfolio computation so the "Account" figure is
+    # exactly what the student sees in their summary bar / Portfolio tab —
+    # NOT a separate, flaky live-price revaluation.
     rows = []
     for email, p in profiles:
-        mv = 0.0
-        for t, pos in p.get("holdings", {}).items():
-            pr = price_map.get(t)
-            if pr is not None and pos.get("shares", 0) > 0:
-                mv += pos["shares"] * pr
-        cash = p.get("cash", STARTING_CASH_CENTS)
-        unsettled = p.get("unsettled_cash", 0)
-        nw = ((cash + unsettled) / 100) + mv
+        port = _portfolio(p)
+        nw = port["total"]
         capital = (STARTING_CASH_CENTS + p.get("total_deposits", 0)) / 100
         ret = ((nw - capital) / capital) * 100 if capital else 0.0
         rows.append(
