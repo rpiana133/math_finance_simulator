@@ -106,7 +106,7 @@ _WARM_TTL = 60.0
 # Closed window: 11:00 UTC -> 22:00 UTC (9pm -> 8am next day Guam time).
 _CURFEW_OPEN_UTC_HOUR = 22   # 8:00 AM Guam
 _CURFEW_CLOSE_UTC_HOUR = 11  # 9:00 PM Guam (day before)
-_IDLE_TIMEOUT = 900          # 15 minutes of real user inactivity -> disconnect
+_IDLE_TIMEOUT = 600          # 10 minutes of real user inactivity -> disconnect
 
 
 def _in_curfew(utc_now: datetime | None = None) -> bool:
@@ -682,7 +682,7 @@ def terms_page():
                     "Access Hours",
                     [
                         "The simulator is available 8:00 AM \u2013 9:00 PM (Chamorro Time).",
-                        "Sessions idle for more than 15 minutes are automatically signed out.",
+                        "Sessions idle for more than 10 minutes are automatically signed out.",
                     ],
                 ),
             ]:

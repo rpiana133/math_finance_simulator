@@ -10,6 +10,9 @@
 ### Fixed
 - **yfinance not thread-safe — wrong/inflated prices under concurrency**: the app's parallel price fetches (via the shared `_shared_executor` in `_portfolio`, `_price_executor`, `warm_price_cache`, movers, history, and dividends) cross-contaminated each other because yfinance is not thread-safe — many different tickers all returned the same wrong price (e.g. everything = SKHY's `$163.68`). This inflated student net worth in the Portfolio tab, Standings, and Admin views, producing phantom accounts worth tens of thousands of dollars. All yfinance reads are now serialized behind a module-level reentrant lock (`_yf_lock` in `utils/market.py`), so each ticker gets its own correct price. Verified: 20/20 distinct tickers now return correct distinct prices under a 12-thread concurrency stress test.
 
+### Changed
+- **Idle timeout reduced from 15 to 10 minutes**: `_IDLE_TIMEOUT` is now 600s — students with no real activity (mouse/keyboard/touch) for 10 minutes are signed out automatically (teachers exempt), further cutting idle instance time.
+
 ## 2026-09-02
 
 ### Added

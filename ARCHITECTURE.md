@@ -74,7 +74,7 @@ OAuth scopes granted (on consent screen):
   - `_touch_client_activity()` — updates `last_client_activity` timestamp from real user activity (via `/_activity`)
   - `_clear_session()` — removes token entry from `_session_store`
 - **Session timeout** — `_check_session_timeout()` runs on page load; clears session if `last_activity` > 30 min
-- **Idle disconnect** — `_check_idle_timeout()` (30s timer) clears session if `last_client_activity` is > 15 min old; students only (teachers exempt). Decoupled from timer pings so a background tab isn't mistaken for real activity
+- **Idle disconnect** — `_check_idle_timeout()` (30s timer) clears session if `last_client_activity` is > 10 min old; students only (teachers exempt). Decoupled from timer pings so a background tab isn't mistaken for real activity
 - **Curfew kick** — `_check_curfew_kick()` (60s timer) signs out students when curfew starts (9pm Guam); teachers exempt
 - **Ephemeral** — lost on instance recycle (no `min-instances`), forces re-auth on cold start
 
@@ -144,7 +144,7 @@ OAuth scopes granted (on consent screen):
 - **Separate heartbeat timer**: 60s timer calls `_touch_session()` independently of `_tick()` — prevents idle-browsing session expiry
 - **Curfew block**: app is server-side locked from 9pm–8am Guam (`_CURFEW_CLOSE_UTC_HOUR=11`, `_CURFEW_OPEN_UTC_HOUR=22`; Guam is UTC+10 with no DST so a fixed UTC window holds year-round). Teachers exempt. Server-side enforcement means the block can't be bypassed by editing client JS
 - **Weekend/holiday market close**: on Saturdays, Sundays, and US stock-market holidays (observed on the Guam calendar date via `_is_market_closed()` + `_US_MARKET_HOLIDAYS_2026`), students can still log in and **view** their portfolio but **cannot trade** — `_execute_trade()` rejects orders and a 🔒 banner explains why. Unlike the curfew (full app block), this allows read-only access. Holiday dates are matched against `_guam_date()`
-- **15-min idle disconnect**: real user activity (mousemove/keydown/click/touch/wheel) is echoed to `/_activity`; the 30s `_check_idle_timeout` timer signs out students idle > 15 min. Distinct `last_client_activity` field keeps the idle check independent of `_heartbeat`/`_tick` pings, so an open background tab counts as idle
+- **10-min idle disconnect**: real user activity (mousemove/keydown/click/touch/wheel) is echoed to `/_activity`; the 30s `_check_idle_timeout` timer signs out students idle > 10 min. Distinct `last_client_activity` field keeps the idle check independent of `_heartbeat`/`_tick` pings, so an open background tab counts as idle
 - **Cost motivation**: curfew + idle disconnect drive idle Cloud Run instances to 0 outside class hours, cutting idle billable instance time and monthly spend (the app had instances alive all night from students' open tabs)
 - **Artifact Registry cleanup policy**: the `cloud-run-source-deploy` repository keeps only the 3 newest image digests per deploy (cleanup policy `keep-latest-3`), purging the orphaned untagged images that had been accumulating storage cost each deploy
 - **Async page load**: `_get(email)` wrapped in `run_in_executor` — `main_page()` is `async def`, no longer blocks event loop
@@ -240,7 +240,7 @@ All timers are created at the `main_page()` top level (outside refreshable funct
 | `_tick` | 300s (repeating) | Re-fetches data and refreshes all refreshable sections; wrapped in try/finally to always touch session |
 | `_heartbeat` | 60s (repeating) | Calls `_touch_session()` independently — prevents idle-browsing session timeout |
 | `_check_session_timeout` | 60s (repeating) | Clears session + redirects to `/` if `last_activity` > 30 min |
-| `_check_idle_timeout` | 30s (repeating) | Clears session + redirects to `/` if `last_client_activity` > 15 min (real user activity only; teachers exempt) |
+| `_check_idle_timeout` | 30s (repeating) | Clears session + redirects to `/` if `last_client_activity` > 10 min (real user activity only; teachers exempt) |
 | `_check_curfew_kick` | 60s (repeating) | Clears session + redirects to `/` when curfew starts (9pm Guam); teachers exempt |
 
 - **All blocking callbacks are `async` functions** that delegate yfinance calls to `asyncio.run_in_executor` (thread pool) to keep the event loop free. `_load_summary` and `_load_portfolio` wrap the executor call in try/except so a profile anomaly degrades to empty data instead of leaving the tab spinning
