@@ -6,7 +6,9 @@ Queries Cloud Monitoring for a date range and aggregates, per hour (UTC-aligned)
   - request count           (run.googleapis.com/request_count, count)
 
 Outputs CSV (hourly + daily) and a raw JSON snapshot, then prints a weekday/weekend
-split and a Cloud Run cost projection for the range.
+split and a Cloud Run cost projection for the range. The projection reports BOTH
+the raw billable usage and the estimated billed amount after the monthly free tier
+(180,000 vCPU-sec / 360,000 GiB-sec / 2M requests) is subtracted.
 
 The projection uses the running service's billing shape: request-based billing,
 us-east1 region, 1 vCPU, 0.5 GiB memory. Pricing values are editable constants
@@ -56,8 +58,15 @@ DEFAULT_REGION = "us-east1"
 # 1 vCPU, 0.5 GiB memory, request-based (per-100ms, minimum 100ms/request).
 BILLABLE_VCPU = 1.0
 BILLABLE_MEM_GIB = 0.5
-VCPU_HOUR_USD = 0.00002400  # $/vCPU-hour (us-east1, request-based)
-MEM_GIB_HOUR_USD = 0.00000250  # $/GiB-hour (us-east1, request-based)
+SECONDS_PER_HOUR = 3600.0
+
+# Cloud Run charges per-SECOND (not per-hour). us-east1 request-based rates:
+VCPU_PER_SECOND_USD = 0.00002400  # $/vCPU-second
+MEM_PER_GIB_SECOND_USD = 0.00000250  # $/GiB-second
+
+# Monthly free tier (request-based), applied per billing account / month:
+FREE_VCPU_SECONDS = 180_000        # = 50 vCPU-hours at 1 vCPU
+FREE_MEM_GIB_SECONDS = 360_000     # = 200 GiB-hours at 0.5 GiB
 FREE_REQUESTS_MONTH = 2_000_000
 COST_PER_1000_REQUESTS = 0.40  # $/1000 requests above free tier (us-east1)
 
@@ -221,19 +230,25 @@ def main() -> int:
     print(f"Total billable hours : {tot_h:,.1f}  (weekday {wd_h:,.1f} / weekend {we_h:,.1f})")
     print(f"Total requests       : {tot_req:,.0f}  (weekday {wd_req:,.0f} / weekend {we_req:,.0f})")
 
-    # --- Cost projection --------------------------------------------------------
-    vcpu_cost = tot_h * VCPU_HOUR_USD * BILLABLE_VCPU
-    mem_cost = tot_h * MEM_GIB_HOUR_USD * BILLABLE_MEM_GIB
+    # --- Cost projection (free tier subtracted) --------------------------------
+    # Note: billable_instance_time is "<= 1 instance busy" seconds per hour, so
+    # per-second vCPU usage = billable_seconds x vCPU (and same for memory).
+    vcpu_secs = tot_h * SECONDS_PER_HOUR * BILLABLE_VCPU
+    mem_gib_secs = tot_h * SECONDS_PER_HOUR * BILLABLE_MEM_GIB
+    billed_vcpu_secs = max(0, vcpu_secs - FREE_VCPU_SECONDS)
+    billed_mem_gib_secs = max(0, mem_gib_secs - FREE_MEM_GIB_SECONDS)
+    vcpu_cost = billed_vcpu_secs * VCPU_PER_SECOND_USD
+    mem_cost = billed_mem_gib_secs * MEM_PER_GIB_SECOND_USD
     billable_req = max(0, tot_req - FREE_REQUESTS_MONTH)
     req_cost = (billable_req / 1000.0) * COST_PER_1000_REQUESTS
     total = vcpu_cost + mem_cost + req_cost
 
-    print("\n=== COST PROJECTION (request-based, us-east1) ===")
-    print(f"vCPU    ({tot_h:,.1f} h x ${VCPU_HOUR_USD} x {BILLABLE_VCPU:g}) : ${vcpu_cost:,.4f}")
-    print(f"Memory  ({tot_h:,.1f} h x ${MEM_GIB_HOUR_USD} x {BILLABLE_MEM_GIB:g}) : ${mem_cost:,.4f}")
-    print(f"Requests({tot_req:,.0f}, {billable_req:,.0f} above {FREE_REQUESTS_MONTH:,} free)         : ${req_cost:,.4f}")
-    print(f"Estimated Cloud Run compute total : ${total:,.4f}")
-    print(f"(Excludes storage / Secret Manager / builds / egress line items.)")
+    print("\n=== COST PROJECTION (request-based, us-east1, free tier applied) ===")
+    print(f"vCPU    : {vcpu_secs:,.0f} sec  - {FREE_VCPU_SECONDS:,} free  = {billed_vcpu_secs:,.0f} billed sec  -> ${vcpu_cost:,.4f}")
+    print(f"Memory  : {mem_gib_secs:,.0f} GiB-s  - {FREE_MEM_GIB_SECONDS:,} free  = {billed_mem_gib_secs:,.0f} billed GiB-s -> ${mem_cost:,.4f}")
+    print(f"Requests: {tot_req:,.0f}  - {FREE_REQUESTS_MONTH:,} free  = {billable_req:,.0f} billed        -> ${req_cost:,.4f}")
+    print(f"Est. Cloud Run compute total (this window) : ${total:,.4f}")
+    print("(Excludes storage / Secret Manager / builds / egress; startup CPU boost + cold starts add a little.)")
 
     print(f"\nWrote: {hourly_path}")
     print(f"       {daily_path}")
