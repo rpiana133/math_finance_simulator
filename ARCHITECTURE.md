@@ -32,7 +32,7 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 │   └── market.py            # yfinance wrappers: prices, history, dividends, top movers + global TTL caches
 ├── services/
 │   ├── profile.py           # Portfolio computation, dust-holding cleanup, alert checks, shared ThreadPoolExecutor(8)
-│   └── sheets.py            # Google Sheets weekly tracker: snapshot creation, ISO-week dedup, row append/update
+│   └── sheets.py            # Google Sheets weekly tracker: graph-friendly row-per-holding snapshots, ISO-week dedup/rewrite, legacy reset, formatting
 └── tests/
     ├── test_audit.py        # Audit log format tests (4)
     ├── test_trading.py      # Trade validation + execution tests (19)
@@ -143,6 +143,7 @@ OAuth scopes granted (on consent screen):
 - **Fireproof `_tick()`**: try/finally ensures `_touch_session()` always fires — prevents 30-min session timeout if `_portfolio()` throws
 - **Separate heartbeat timer**: 60s timer calls `_touch_session()` independently of `_tick()` — prevents idle-browsing session expiry
 - **Curfew block**: app is server-side locked from 9pm–8am Guam (`_CURFEW_CLOSE_UTC_HOUR=11`, `_CURFEW_OPEN_UTC_HOUR=22`; Guam is UTC+10 with no DST so a fixed UTC window holds year-round). Teachers exempt. Server-side enforcement means the block can't be bypassed by editing client JS
+- **Weekend/holiday market close**: on Saturdays, Sundays, and US stock-market holidays (observed on the Guam calendar date via `_is_market_closed()` + `_US_MARKET_HOLIDAYS_2026`), students can still log in and **view** their portfolio but **cannot trade** — `_execute_trade()` rejects orders and a 🔒 banner explains why. Unlike the curfew (full app block), this allows read-only access. Holiday dates are matched against `_guam_date()`
 - **15-min idle disconnect**: real user activity (mousemove/keydown/click/touch/wheel) is echoed to `/_activity`; the 30s `_check_idle_timeout` timer signs out students idle > 15 min. Distinct `last_client_activity` field keeps the idle check independent of `_heartbeat`/`_tick` pings, so an open background tab counts as idle
 - **Cost motivation**: curfew + idle disconnect drive idle Cloud Run instances to 0 outside class hours, cutting idle billable instance time and monthly spend (the app had instances alive all night from students' open tabs)
 - **Artifact Registry cleanup policy**: the `cloud-run-source-deploy` repository keeps only the 3 newest image digests per deploy (cleanup policy `keep-latest-3`), purging the orphaned untagged images that had been accumulating storage cost each deploy
@@ -196,16 +197,18 @@ Students can save a weekly snapshot of their portfolio to a personal Google Shee
 1. On first export, a **"My Stock Tracker" spreadsheet** is created in the student's Google Drive (via `spreadsheets.create`), and the spreadsheet ID is persisted in `profile["spreadsheet_id"]` in their GCS profile
 2. The student's own OAuth token (`_session_store[token]["oauth_creds"]`) carries the `spreadsheets` scope; Sheets API calls run on behalf of the student using their own credentials (not a service account)
 3. On click, `save_weekly_snapshot(oauth_creds, portfolio, spreadsheet_id)` runs in the executor thread pool:
-   - Builds a row for the current ISO week (e.g. `2026-W36`): `[week_key, date, holdings_summary, ...]`
-   - Holdings are compressed into one cell as `ticker:shares:avg:live:value | ...`
-   - `_existing_weeks()` scans column A for an existing row with the same week key
-   - **Same week → update in place** (overwrite that row); **new week → append** after the last data row
+   - Writes **one row per holding** for the current ISO week (e.g. `2026-W36`), repeating `Net Worth` on each row so a whole-account value-over-time chart is easy too
+   - `_weeks_map()` scans column A for an existing week key; same week rows are **deleted** (via `batchUpdate.deleteDimension`) then rewritten; new weeks **append** after the last data row
+   - Legacy blob-format sheets (old 9-col schema with a merged `Cash` cell) are auto-detected by `_is_legacy()` and **reset** to the new schema
+   - Formatting applied via `spreadsheets().batchUpdate`: bold + filled header row, frozen header row, column widths, and numeric cell formatting
 4. The spreadsheet ID is saved to the profile on first creation; subsequent exports reuse it (avoids Drive API scope entirely — only `spreadsheets` scope is needed)
 
 ### Sheet columns
 | A | B | C | D | E | F | G | H | I |
 |---|---|---|---|---|---|---|---|---|
-| Week | Date | Ticker | Shares | Avg Price | Live Price | Value | Cash | Net Worth |
+| Week | Date | Ticker | Shares | Avg Price | Live Price | Value | Return % | Net Worth |
+
+All price/share/return/net-worth columns are stored as plain numbers (no `$` prefix) so sheets can chart Live Price, Value, or Net Worth against Week/Date without string parsing.
 
 ### Key design decisions
 - **No Drive API scope** — `drive.files().list()` is not used; the spreadsheet ID is stored in the student's GCS profile instead, avoiding the need to add a Drive scope to the OAuth consent screen

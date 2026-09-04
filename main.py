@@ -8,7 +8,7 @@ import logging
 import os
 import secrets
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from threading import Lock
 
@@ -119,6 +119,50 @@ def _in_curfew(utc_now: datetime | None = None) -> bool:
     utc_now = utc_now or datetime.utcnow()
     hour = utc_now.hour
     return _CURFEW_CLOSE_UTC_HOUR <= hour < _CURFEW_OPEN_UTC_HOUR
+
+
+# US stock-market (NYSE) holiday dates for the simulation year.
+# Each holiday is observed on its GUAM calendar date (calendar-date labels match
+# between Guam and the US — e.g. Labor Day Mon Sep 7 is Monday in Guam too).
+# Dates are matched against _guam_date() in _is_market_closed(). Refresh annually;
+# any holiday that lands on a weekend is already covered by the weekend rule.
+# 2026 NYSE closures (US mainland dates; Guam shares the same calendar date):
+#   New Year's Day, MLK Day, Presidents' Day, Good Friday, Memorial Day,
+#   Juneteenth, Independence Day (+observed), Labor Day, Thanksgiving, Christmas.
+_US_MARKET_HOLIDAYS_2026: set[tuple[int, int, int]] = {
+    (2026, 1, 1),   # New Year's Day
+    (2026, 1, 19),  # MLK Day
+    (2026, 2, 16),  # Presidents' Day
+    (2026, 4, 3),   # Good Friday
+    (2026, 5, 25),  # Memorial Day
+    (2026, 6, 19),  # Juneteenth
+    (2026, 7, 3),   # Independence Day (observed, Fri)
+    (2026, 7, 4),   # Independence Day (Sat)
+    (2026, 9, 7),   # Labor Day
+    (2026, 11, 26), # Thanksgiving
+    (2026, 12, 25), # Christmas
+}
+
+
+def _guam_date(utc_now: datetime | None = None) -> tuple[int, int, int]:
+    """Return (year, month, day) for Guam local time (UTC+10, no DST)."""
+    utc_now = utc_now or datetime.utcnow()
+    g = utc_now + timedelta(hours=10)
+    return (g.year, g.month, g.day)
+
+
+def _is_market_closed(utc_now: datetime | None = None) -> bool:
+    """True if the market is closed for the calendar day (weekend or US holiday).
+
+    Trading is disabled (viewing still allowed) when the real exchange that
+    these US tickers trade on is closed: every Saturday/Sunday plus US stock-
+    market holidays, judged on the Guam calendar date.
+    """
+    gd = _guam_date(utc_now)
+    weekday = datetime(*gd).weekday()
+    if weekday >= 5:  # Saturday=5, Sunday=6
+        return True
+    return gd in _US_MARKET_HOLIDAYS_2026
 
 
 
@@ -676,6 +720,8 @@ def _validate_trade_inputs(ticker, price, action, mode, shares_val, amount_val, 
 
 
 def _execute_trade(data, profile, email, locks_dict, save_fn, all_tickers):
+    if _is_market_closed():
+        return False, "Market closed. Trading opens on the next school trading day (market holidays and weekends are closed).", None, None
     t = data.get("ticker", "")
     if t not in all_tickers:
         return False, "Invalid ticker.", None, None
@@ -990,6 +1036,11 @@ async def main_page():
 
     @ui.refreshable
     def banner_area():
+        if _is_market_closed():
+            ui.html(
+                '<div class="banner banner-warning">\U0001f512 Market closed (weekend or market holiday). You can review your portfolio, but trading opens on the next school trading day.</div>',
+                sanitize=False,
+            )
         da = _deposit_state["amt"]
         if da:
             ui.html(
