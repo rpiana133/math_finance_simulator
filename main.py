@@ -930,7 +930,7 @@ async def main_page():
     _sheet_state: dict = {"busy": False, "msg": ""}
 
     async def _do_save_to_sheets():
-        from services.sheets import save_weekly_snapshot
+        from services.sheets import save_weekly_snapshot, write_weekly_log
 
         if _sheet_state["busy"]:
             return
@@ -960,11 +960,22 @@ async def main_page():
             )
             if info.get("spreadsheet_id") != existing_id:
                 profile["spreadsheet_id"] = info["spreadsheet_id"]
-                await loop.run_in_executor(_executor, _save, email, profile)
+            # Week-to-week price history tab (backfill + forward).
+            log_info, log_url = await loop.run_in_executor(
+                _executor,
+                write_weekly_log,
+                oauth_creds,
+                _summary_state["data"],
+                info.get("spreadsheet_id"),
+                profile,
+            )
+            profile["weekly_log_last_exported"] = log_info.get("current_week")
+            await loop.run_in_executor(_executor, _save, email, profile)
             action = "Updated" if info["action"] == "updated" else "Saved"
             _sheet_state["msg"] = (
-                f"{action} your weekly snapshot ({info['week']}). Link: {url}"
-            )
+                f"{action} snapshot ({info['week']}) + price log "
+                f"({log_info.get('rows', 0)} rows). "
+                f"Snapshot: {url}")
         except Exception as e:
             logger.error(f"Sheets export error: {e}")
             _sheet_state["msg"] = f"Sheet export failed: {e}"

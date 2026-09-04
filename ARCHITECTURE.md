@@ -32,7 +32,7 @@ A classroom stock market simulation built with NiceGUI, Google OAuth, Yahoo Fina
 │   └── market.py            # yfinance wrappers: prices, history, dividends, top movers + global TTL caches
 ├── services/
 │   ├── profile.py           # Portfolio computation, dust-holding cleanup, alert checks, shared ThreadPoolExecutor(8)
-│   └── sheets.py            # Google Sheets weekly tracker: graph-friendly row-per-holding snapshots, ISO-week dedup/rewrite, legacy reset, formatting
+│   └── sheets.py            # Sheets tracker: snapshot tab + 'Weekly Log' price-history tab (yfinance backfill), tab management, formatting
 └── tests/
     ├── test_audit.py        # Audit log format tests (4)
     ├── test_trading.py      # Trade validation + execution tests (19)
@@ -203,12 +203,21 @@ Students can save a weekly snapshot of their portfolio to a personal Google Shee
    - Formatting applied via `spreadsheets().batchUpdate`: bold + filled header row, frozen header row, column widths, and numeric cell formatting
 4. The spreadsheet ID is saved to the profile on first creation; subsequent exports reuse it (avoids Drive API scope entirely — only `spreadsheets` scope is needed)
 
-### Sheet columns
+### Sheet columns (Snapshot tab)
 | A | B | C | D | E | F | G | H | I |
 |---|---|---|---|---|---|---|---|---|
 | Week | Date | Ticker | Shares | Avg Price | Live Price | Value | Return % | Net Worth |
 
 All price/share/return/net-worth columns are stored as plain numbers (no `$` prefix) so sheets can chart Live Price, Value, or Net Worth against Week/Date without string parsing.
+
+### Weekly Log tab
+A second tab, **`Weekly Log`**, tracks **week-to-week price changes since buy** (not just the single snapshot). On every "Save", `write_weekly_log()` is called alongside the snapshot:
+
+1. For each held, non-dust ticker (shares > 0 and cost > 0), it determines the buy date from the first `Buy` in `profile["history"]`, else falls back to one year back.
+2. **Backfills** each ticker's weekly **Friday close** from yfinance (`fetch_full_history` → `resample('W-FRI').last()`), plus the current week's live price.
+3. Writes one row per `(ticker, week)`: `Week | Date | Ticker | Close Price | Avg Price | Value | Return %`.
+4. The tab is rebuilt idempotently (cleared then rewritten) so repeated Saves never duplicate weekly rows; `profile["weekly_log_last_exported"]` records the last exported ISO week.
+5. Tab created on first use via `batchUpdate.addSheet`; format helpers take an explicit `sheetId` so the snapshot and log tabs can each be styled independently.
 
 ### Key design decisions
 - **No Drive API scope** — `drive.files().list()` is not used; the spreadsheet ID is stored in the student's GCS profile instead, avoiding the need to add a Drive scope to the OAuth consent screen
