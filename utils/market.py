@@ -621,7 +621,7 @@ POPULAR_STOCKS = {
     "HIMS": "Hims & Hers",
     "NVO": "Novo Nordisk ADR",
     "SKHY": "SK Hynix ADR",
-    "SSNLF": "Samsung Electronics ADR",
+    "SHECY": "Shin-Etsu Chemical ADR",
     "TDOC": "Teladoc Health",
     "VKTX": "Viking Therapeutics",
     "QURE": "uniQure",
